@@ -10,25 +10,27 @@ output:
     df_print: paged
 ---
 
+In this document we will describe the planned analyses for the experiment. To illustrate these analyses we will use an example data set, which is to be replaced when data collection has ended.
+
 ```{r document options, echo = F}
+# First we set some global document options so as that messages from R are not shown in the output
 knitr::opts_chunk$set(warning = FALSE, 
                       message = FALSE, 
                       fig.align = "center", 
                       fig.width = 10)
 ```
 
-```{r setup}
+```{r setup options}
 
-# Clear workspace
+# Clear the workspace
 rm(list=ls())
 
-# Load required packages
-
+# Load the required packages
 library(lme4)		        # For frequentist hierarchical modeling
 library(lmerTest)	      # For testing effect in lme4
 library(brms) 	        # For Bayesian hierarchical modeling
 library(bayesplot)	    # For plotting the samples
-library(RColorBrewer)   # needed for some extra colours in one of the graphs
+library(viridis)
 library(ggmcmc)
 library(ggthemes)
 library(ggridges)
@@ -36,23 +38,22 @@ library(gridExtra)
 library(mcmcplots)
 library(car)
 
-# Specify the options for `lme4`
+# Set a global seed to make the results reproducible
+seed <- 120495
 
+# Specify the algorithmic options for `lme4`
 ctrl <- lme4::lmerControl(optimizer = "optimx", calc.derivs = FALSE,
                           optCtrl = list(method = "nlminb", starttests = FALSE, kkt = FALSE))
 
-# Specify the options for `brms`
-warmup          <- 100           # Number of samples to discard before saving
-iterations      <- 500           # Number of total samples
+# Specify the algorithmic options for `brms`
+warmup          <- 200           # Number of samples to discard before saving
+iterations      <- 1000          # Number of total samples
 chains          <- 4             # Number of individual sampling chains
 cores           <- 4             # Number of CPU cores to use
 max_treedepth   <- 10            # Maximum allowed tree depth
 adapt_delta     <- 0.999         # Target acceptance rate of samples
 
-# Set global seed to reproduce results
-seed            <- 120495
-
-# Helper functions
+# Helper functions for data manipulation and plotting
 .scaleNumericData <- function(x, center = TRUE, scale = TRUE) {
   if (nrow(x) == 0)
     return(x)
@@ -84,28 +85,28 @@ seed            <- 120495
   return(p)
 }
 
-# Apply global seed
+# Apply the chosen seed globally
 set.seed(seed)
 ```
 
-# Data
+# Inspecting the data
 
 The data set contains the following variables:
 
-- ID: The identification number of the participant
-- INEG: Intensity of daily negative events
-- IPOS: Intensity of daily positive events
-- RUM: Intensity of ruminating
-- SAV: Intensity of savouring
-- SHAREN: Intensity of sharing negative events
-- SHAREP: Intensity of sharing positive events
-- PP: Indicator of psychopathology
-- GEN: Gender
-- AGE: Age
+- ID: The identification number of the participant,
+- INEG: The intensity of daily negative events experienced by the participant,
+- IPOS: The intensity of daily positive events experienced by the participant,
+- RUM: The intensity of ruminating experienced by the participant,
+- SAV: The intensity of savoring experienced by the participant,
+- SHAREN: The intensity by which the participant shared negative events,
+- SHAREP: The intensity by which the participant shared positive events,
+- PP: The psychopathology score of the participant
+- GEN: The gender of the participant
+- AGE: The age of the participant
 
 ```{r data}
 
-# Read data set
+# Start by reading in the data set
 dataset <- read.csv(file = "https://raw.githubusercontent.com/koenderks/preregistrationESM/master/CCP_pilot_resampled.csv", sep = ",")
 
 # Correct column types for data
@@ -120,13 +121,31 @@ dataset <- .scaleNumericData(dataset)
 head(dataset)
 ```
 
+# Hypotheses
+
+- Hypothesis 1: Talking more about daily negative events is associated with lower psychopathology
+- Hypothesis 2:
+- Hypothesis 3:
+- Hypothesis 4:
+- Hypothesis 5:
+- Hypothesis 6: Intensity of daily negative events is positively associated with sharing
+- Hypothesis 7:
+- Hypothesis 8:
+- Hypothesis 9:
+- Hypothesis 10:
+
 # Analyses
+
+Below we will outline six models in order to assert the evidence in the data for these hypotheses.
 
 ## Model 1: Sharing negative events
 
+- Hypothesis 1: Talking more about daily negative events is associated with lower psychopathology
+- Hypothesis 6: Intensity of daily negative events is positively associated with sharing
+
 The regression formula for this model is:
 
-$$SHAREN_{ij} = \gamma_{00} + \gamma_{10} \cdot PP_{ij} + \gamma_{20} \cdot AGE_{ij} + \gamma_{30} \cdot GEN_{{M}_{ij}} + u_{4j} \cdot INEG__ij} + \epsilon_{ij}$$
+$$SHAREN_{ij} = \gamma_{00} + \gamma_{10} \cdot PP_{ij} + \gamma_{20} \cdot AGE_{ij} + \gamma_{30} \cdot GEN_{{M}_{ij}} + u_{4j} \cdot INEG_{ij} + \epsilon_{ij}$$
 
 ```{r class.source = "fold-show"}
 
@@ -145,15 +164,33 @@ model1f <- SHAREN ~ 1 + PP + AGE + (1 + INEG|ID)
 model1b <- SHAREN ~ 0 + Intercept + PP + AGE + GEN + (1 + INEG|ID)
 ```
 
-### Data visualization
-
 ```{r}
-p1 <- ggplot(dataset, mapping = aes(x = PP, y = SHAREN)) +
-      geom_point()
-p2 <- ggplot(dataset, mapping = aes(x = INEG, y = SHAREN, col = ID)) +
-      geom_point() + geom_jitter(width = 0.01, height = 0.01)
+p1 <- ggplot(data = dataset, aes(x = PP, y = SHAREN)) +
+        geom_point(size = 1.2, alpha = 0.8, position = "jitter") +
+        geom_smooth(method = lm, se = FALSE, size = .5, alpha = .8) +
+        labs(title = "Sharing vs. Psychopathology",
+              subtitle = "Fixed effect") +
+        geom_segment(x = -3, xend = 3, y = -Inf, yend = -Inf, col = "black") +
+        geom_segment(x = -Inf, xend = -Inf, y = -3, yend = 3, col = "black") +
+        scale_y_continuous(name = "SHAREN", limits = c(-3, 3), breaks = pretty(c(-3, 3))) +
+        scale_x_continuous(name = "PP", limits = c(-3, 3), breaks = pretty(c(-3, 3))) +
+        theme_minimal() +
+        theme(panel.grid = element_blank(), axis.ticks = element_line(), legend.position = "none")
+
+p2 <- ggplot(data = dataset, aes(x = INEG, y = SHAREN, col = ID, group = ID)) +
+        geom_point(size = 1.2, alpha = .8, position = "jitter") + 
+        geom_smooth(method = lm, se = FALSE, size = .5, alpha = .8) +
+        labs(title = "Sharing vs. Intensity of negative events",
+              subtitle = "Random effects") +
+        geom_segment(x = -3, xend = 3, y = -Inf, yend = -Inf, col = "black") +
+        geom_segment(x = -Inf, xend = -Inf, y = -3, yend = 3, col = "black") +
+        scale_y_continuous(name = "SHAREN", limits = c(-3, 3), breaks = pretty(c(-3, 3))) +
+        scale_x_continuous(name = "INEG", limits = c(-3, 3), breaks = pretty(c(-3, 3))) +
+        theme_minimal() +
+        theme(panel.grid = element_blank(), axis.ticks = element_line(), legend.position = "none")
 grid.arrange(p1, p2, nrow = 1)
 ```
+
 
 ### Frequentist analysis
 
@@ -177,19 +214,36 @@ print(test1_f2)
 
 ### Bayesian analysis
 
+For the Bayesian analysis we use two different sets of priors.
+
+The non-informative set of priors consists of:
+
+$$\gamma_{00} \sim N(0, 10) \\
+  \gamma_{10} \sim N(0, 10) \\
+  \gamma_{20} \sim N(0, 10) \\ 
+  \gamma_{30} \sim N(0, 10)$$
+
+The informed set of priors consists of: 
+
+$$\gamma_{00} \sim Cauchy(-0.48, 0.85) \\
+  \gamma_{10} \sim N(-.26,.25) \\
+  \gamma_{20} \sim N(-0.01, 0.05) \\ 
+  \gamma_{30} \sim N(0.45,.12) \\
+  \sigma_{u_{4j}} \sim N(0.48,.06)$$
+
 ```{r}
 
 # Non-informative priors:
 #
-# b_Intercept ~ Normal(0,100)
-# b_Age ~ Normal(0,100)
-# b_PP ~ Normal(0,100)
-# b_GEN2 ~ Normal(0,100)
+# b_Intercept ~ Normal(0,10)
+# b_Age ~ Normal(0,10)
+# b_PP ~ Normal(0,10)
+# b_GEN2 ~ Normal(0,10)
 
-priorsni <- c(set_prior("normal(0,100)", class = "b", coef = "Intercept"),
-            set_prior("normal(0,100)", class = "b", coef = "AGE"),
-            set_prior("normal(0,100)", class = "b", coef = "PP"),
-            set_prior("normal(0,100)", class = "b", coef = "GEN2"))
+priorsni <- c(set_prior("normal(0,10)", class = "b", coef = "Intercept"),
+            set_prior("normal(0,10)", class = "b", coef = "AGE"),
+            set_prior("normal(0,10)", class = "b", coef = "PP"),
+            set_prior("normal(0,10)", class = "b", coef = "GEN2"))
 
 fit1_bni <- brms::brm(formula = model1b, 
                     data      = dataset, 
@@ -306,7 +360,7 @@ p <- ggplot(data = posterior1.2,
       coord_cartesian(ylim = c(0, 5))+
       scale_fill_manual(name   = "Densities",
                         values = c("yellow", "dodgerblue"),
-                        labels = c("Non-informative ~ N(0, 100) prior",
+                        labels = c("Non-informative ~ N(0, 10) prior",
                                     "Informative ~ N(-.26,.25) prior")) +
       scale_colour_manual(name   = 'Posterior/Prior',
                           values = c("black","red"),
@@ -318,7 +372,7 @@ p <- ggplot(data = posterior1.2,
                        range  = c(.7,.3),
                        labels = c("posterior", "prior"))+
       annotate(geom    = "text",
-                x = summary(fit1_f)$coefficients["PP", "Estimate"], y = -.13,
+                x = summary(fit1_f)$coefficients["PP", "Estimate"], y = 4,
            label  = paste0("LME estimate:  ",
                            round(summary(fit1_f)$coefficients["PP", "Estimate"], 3)),
            col    = "black",
@@ -331,7 +385,7 @@ p <- ggplot(data = posterior1.2,
       geom_segment(x = -Inf, xend = -Inf, y = 0, yend = 5) +
       theme_minimal() +
       theme(panel.grid = element_blank(), axis.ticks = element_line())
-p
+print(p)
 ```
 
 ##### Hypothesis 6: INEG|ID > 0
@@ -345,26 +399,36 @@ print(tab)
 ```
 
 ```{r}
-p1 <- plot(hypothesis1_bi, plot = F)[[1]]
-p2 <- ggplot(filter(ggs(fit1_bi), Parameter == "b_PP", Iteration > 100), aes(x = value))+
-      geom_density(fill  = "yellow", alpha = .5)+
-      geom_vline(xintercept = 0, col  = "red", size = 1)+
-      scale_x_continuous(name   = "Value", limits = c(-2, 2)) + 
-      geom_vline(xintercept = summary(fit1_bi)$fixed[2,3:4], col = "blue", linetype = 2) +
-      theme_light() +
-      labs(title = paste0("Posterior Density of ", "b_PP"))
-grid.arrange(p1, p2, nrow = 1)
-```
 
-```{r}
-p <- ggplot()+
-    ggridges::geom_density_ridges(data  = posterior1, 
-                                aes(x      = value,
-                                    #y      = reorder(as.factor(class), meanperclass),
-                                    height = ..density.., 
-                                    fill   = ID),
-                                scale = 3, 
-                                alpha = .6)
+samples <- posterior_samples(fit1_bi, pars = "INEG|ID")
+samples <- as_tibble(t(samples[, 7:9]))
+
+SHAREN <- dataset %>% group_by(ID) %>% summarise("SHAREN" = mean(SHAREN, na.rm = T))
+SHAREN <- SHAREN[complete.cases(SHAREN), ]
+
+plotdata <- cbind(SHAREN, samples) %>%
+gather(key = "key", value = "value", -SHAREN, -ID) %>%
+  group_by(ID) %>%
+  mutate(meanperid = mean(value))%>%
+  ungroup()
+
+p <- ggplot() +
+      geom_vline(xintercept = 0, col = "red") +
+      ggridges::geom_density_ridges(data  = plotdata, 
+                                    aes(x = value, y = reorder(as.factor(ID), meanperid), height = ..density.., 
+                                        fill = ID, scale = 3, alpha = .6),
+                                    scale = 3, 
+                                    alpha = .6) +
+      geom_point(data = summarise(group_by(plotdata, ID), meand = mean(meanperid)),
+                  aes(x = meand, y = ID), col = "red") +
+      scale_x_continuous(name = "Value", limits = c(-5, 10)) + 
+      scale_y_discrete(name = "ID") +
+      viridis::scale_fill_viridis(discrete = TRUE) +
+      labs(title = expression(paste("ID Level Error of Regression Coefficient of INEG on SHARIN (", u["4j"],")")),
+           subtitle = expression(paste("Posterior distribution of ID level error of regression coefficient (", u["4j"],") per ID with the means in red"))) +
+      theme_minimal() +
+      theme(panel.grid = element_blank(), axis.ticks = element_line())
+print(p)
 ```
 
 
@@ -463,7 +527,7 @@ results$Restriction[c(1, 6)] <- c("PP = 0",
                                   "INEG > 0")
 results$pval[c(1, 6)] <- c(test1_f$`Pr(>Chisq)`[6],
                            test1_f$`Pr(>Chisq)`[9])
-results$er[c(1, 6)] <- c(hypothesis1_b$hypothesis[6], 
-                          hypothesis6_b$hypothesis[6])
+results$er[c(1, 6)] <- c(hypothesis1_bi$hypothesis[6], 
+                          hypothesis6_bi$hypothesis[6])
 print(results)
 ```
