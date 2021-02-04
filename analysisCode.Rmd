@@ -62,8 +62,7 @@ library(ggridges)
 ### 1.3 Read data
 
 ```{r read data}
-setwd("C:/Users/derksk/OneDrive - NBU/Desktop/PhD/Side projects/preregistrationESM") # Set your working directory
-dataset <- read.csv(file = "CCP_pilot_resampled.csv", sep = ",")
+dataset <- read.csv(file = "https://raw.githubusercontent.com/koenderks/preregistrationESM/master/CCP_pilot_resampled.csv", sep = ",")
 ```
 
 ## 2. Hypotheses and models
@@ -135,8 +134,8 @@ ctrl <- lme4::lmerControl(optimizer = "optimx", calc.derivs = FALSE,
 ```{r fit lme4 models}
 fit1_f <- lme4::lmer(formula = model1, data = dataset, control = ctrl)
 # fit2_f <- lme4::lmer(formula = model2, data = dataset, control = ctrl)
-# fit3_f <- lme4::lmer(formula = model3, data = dataset, control = ctrl)
-# fit4_f <- lme4::lmer(formula = model4, data = dataset, control = ctrl)
+fit3_f <- lme4::lmer(formula = model3, data = dataset, control = ctrl)
+fit4_f <- lme4::lmer(formula = model4, data = dataset, control = ctrl)
 # fit5_f <- lme4::lmer(formula = model5, data = dataset, control = ctrl)
 # fit6_f <- lme4::lmer(formula = model5, data = dataset, control = ctrl)
 ```
@@ -147,8 +146,8 @@ fit1_f <- lme4::lmer(formula = model1, data = dataset, control = ctrl)
 ```{r inspect lme4 output}
 sum1_f <- summary(fit1_f)
 # sum2_f <- summary(fit2_f)
-# sum3_f <- summary(fit3_f)
-# sum4_f <- summary(fit4_f)
+sum3_f <- summary(fit3_f)
+sum4_f <- summary(fit4_f)
 # sum5_f <- summary(fit5_f)
 # sum6_f <- summary(fit6_f)
 ```
@@ -158,8 +157,8 @@ sum1_f <- summary(fit1_f)
 ```{r run lme4 tests}
 test1_f <- lmerTest::ranova(fit1_f)
 # test2_f <- lmerTest::ranova(fit2_f)
-# test3_f <- lmerTest::ranova(fit3_f)
-# test4_f <- lmerTest::ranova(fit4_f)
+test3_f <- lmerTest::ranova(fit3_f)
+test4_f <- lmerTest::ranova(fit4_f)
 # test5_f <- lmerTest::ranova(fit5_f)
 # test6_f <- lmerTest::ranova(fit6_f)
 ```
@@ -172,7 +171,7 @@ test1_f <- lmerTest::ranova(fit1_f)
 priors_1_default <- brms::get_prior(formula = model1, data = dataset)
 ```
 
-### 4.2 Specify prior distributions
+### 4.2 Specify informed prior distributions
 
 #### 4.2.1 Model 1: Sharing negative events
 
