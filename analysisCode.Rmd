@@ -11,7 +11,10 @@ output:
 ---
 
 ```{r document options, echo = F}
-knitr::opts_chunk$set(warning = FALSE, message = FALSE, fig.align = "center", fig.width = 10)
+knitr::opts_chunk$set(warning = FALSE, 
+                      message = FALSE, 
+                      fig.align = "center", 
+                      fig.width = 10)
 ```
 
 ```{r setup}
@@ -19,7 +22,7 @@ knitr::opts_chunk$set(warning = FALSE, message = FALSE, fig.align = "center", fi
 # Clear workspace
 rm(list=ls())
 
-## Load required packages
+# Load required packages
 
 library(lme4)		        # For frequentist hierarchical modeling
 library(lmerTest)	      # For testing effect in lme4
@@ -30,44 +33,88 @@ library(ggmcmc)
 library(ggthemes)
 library(ggridges)
 library(gridExtra)
+library(mcmcplots)
+library(car)
 
-## Specify the options for `lme4`
+# Specify the options for `lme4`
 
 ctrl <- lme4::lmerControl(optimizer = "optimx", calc.derivs = FALSE,
-                     optCtrl = list(method = "nlminb", starttests = FALSE, 
-                                         kkt = FALSE))
+                          optCtrl = list(method = "nlminb", starttests = FALSE, kkt = FALSE))
 
-## Specify the options for `brms`
-warmup      <- 1000
-iterations  <- 5000
-chains      <- 4
-cores       <- 4
+# Specify the options for `brms`
+warmup          <- 100           # Number of samples to discard before saving
+iterations      <- 500           # Number of total samples
+chains          <- 4             # Number of individual sampling chains
+cores           <- 4             # Number of CPU cores to use
+max_treedepth   <- 10            # Maximum allowed tree depth
+adapt_delta     <- 0.999         # Target acceptance rate of samples
 
-## Set global seed to reproduce results
-seed        <- 120495
+# Set global seed to reproduce results
+seed            <- 120495
 
 # Helper functions
-.plotCaterpillars <- function(mtfit, parameters, warmup = 1000){
-  p <- ggplot(filter(mtfit, Parameter %in% parameters),
-        aes(x   = Iteration, y   = value, col = as.factor(Chain)))+
-        geom_line() +
-        geom_vline(xintercept = warmup)+
-        facet_grid(Parameter ~ . , scale  = 'free_y', switch = 'y')+
-        labs(title = "Caterpillar Plots", col = "Chains")
+.scaleNumericData <- function(x, center = TRUE, scale = TRUE) {
+  if (nrow(x) == 0)
+    return(x)
+  idx <- sapply(x, is.numeric)
+  x[, idx] <- scale(x[, idx, drop = FALSE], center, scale)
+  attr(x, which = "scaled:center") <- NULL
+  attr(x, which = "scaled:scale")  <- NULL
+  return(x)
+}
+
+.plotPosteriorModelPP <- function(fit, title, xmin, xmax, color){
+  sumFixed <- summary(fit)$fixed
+  p <- ggplot(filter(ggs(fit), Parameter == "b_PP", Iteration > warmup), aes(x = value)) +
+      geom_segment(x = 0, xend = 0, y = Inf, yend = 0, col = "red") +
+      geom_segment(x = sumFixed[2,1], xend = sumFixed[2,1], 
+                   y = Inf, yend = 0, col = "blue") +
+      geom_segment(x = sumFixed[2,3], xend = sumFixed[2,3], 
+                   y = Inf, yend = 0, col = "blue", linetype = 2) +
+      geom_segment(x = sumFixed[2,4], xend = sumFixed[2,4], 
+                         y = Inf, yend = 0, col = "blue", linetype = 2) +
+      geom_density(fill  = color, alpha = .05) +
+      scale_x_continuous(name = "Value", limits = c(xmin, xmax), breaks = pretty(c(xmin, xmax, 0))) + 
+      scale_y_continuous(name = "Density") +
+      labs(title = title) +
+      geom_segment(x = xmin, xend = xmax, y = -Inf, yend = -Inf) +
+      geom_segment(x = -Inf, xend = -Inf, y = 0, yend = 2) +
+      theme_minimal() +
+      theme(panel.grid = element_blank(), axis.ticks = element_line())
   return(p)
 }
 
+# Apply global seed
+set.seed(seed)
 ```
 
 # Data
 
+The data set contains the following variables:
+
+- ID: The identification number of the participant
+- INEG: Intensity of daily negative events
+- IPOS: Intensity of daily positive events
+- RUM: Intensity of ruminating
+- SAV: Intensity of savouring
+- SHAREN: Intensity of sharing negative events
+- SHAREP: Intensity of sharing positive events
+- PP: Indicator of psychopathology
+- GEN: Gender
+- AGE: Age
+
 ```{r data}
 
-# Rad data set
+# Read data set
 dataset <- read.csv(file = "https://raw.githubusercontent.com/koenderks/preregistrationESM/master/CCP_pilot_resampled.csv", sep = ",")
 
-dataset$ID <- as.factor(dataset$ID)
-dataset$DAY <- as.factor(dataset$DAY)
+# Correct column types for data
+dataset$ID   <- as.factor(dataset$ID)
+dataset$DAY  <- as.factor(dataset$DAY)
+dataset$GEN  <- as.factor(dataset$GEN)
+
+# Standardize numeric variables
+dataset <- .scaleNumericData(dataset)
 
 # Inspect the data set
 head(dataset)
@@ -75,13 +122,14 @@ head(dataset)
 
 # Analyses
 
-```{r, echo = FALSE}
-set.seed(seed)
-```
-
 ## Model 1: Sharing negative events
 
+The regression formula for this model is:
+
+$$SHAREN_{ij} = \gamma_{00} + \gamma_{10} \cdot PP_{ij} + \gamma_{20} \cdot AGE_{ij} + \gamma_{30} \cdot GEN_{{M}_{ij}} + u_{4j} \cdot INEG__ij} + \epsilon_{ij}$$
+
 ```{r class.source = "fold-show"}
+
 # Hypothesis 1: 
 # Talking more about daily negative events is associated with lower psychopathology 
 # -> Negative population effect (PP < 0).
@@ -91,201 +139,234 @@ set.seed(seed)
 # -> Positive group effect (INEG|ID > 0).
 # 
 # Model:
-# SHAREN ~ PP + AGE + GEN + INEG|ID/DAY
+# SHAREN ~ 1 + PP + AGE + GEN + (1 + INEG|ID)
 
-model1 <- SHAREN ~ 1 + PP + AGE + GEN + INEG|ID/DAY
+model1f <- SHAREN ~ 1 + PP + AGE + (1 + INEG|ID)
+model1b <- SHAREN ~ 0 + Intercept + PP + AGE + GEN + (1 + INEG|ID)
+```
+
+### Data visualization
+
+```{r}
+p1 <- ggplot(dataset, mapping = aes(x = PP, y = SHAREN)) +
+      geom_point()
+p2 <- ggplot(dataset, mapping = aes(x = INEG, y = SHAREN, col = ID)) +
+      geom_point() + geom_jitter(width = 0.01, height = 0.01)
+grid.arrange(p1, p2, nrow = 1)
 ```
 
 ### Frequentist analysis
 
-```{r class.source = "fold-show"}
-fit1_f  <- lme4::lmer(formula = model1, data = dataset, control = ctrl)
+```{r}
+fit1_f  <- lme4::lmer(formula = model1f, data = dataset, control = ctrl)
 sum1_f  <- summary(fit1_f)
-test1_f <- lmerTest::ranova(fit1_f)
+``` 
 
+##### Test for fixed effects 
+
+```{r}
+test1_f <- car::Anova(fit1_f)
 print(test1_f)
+```
+##### Test for random effects
+
+```{r}
+test1_f2 <- lmerTest::ranova(fit1_f)
+print(test1_f2)
 ```
 
 ### Bayesian analysis
 
-#### Default priors
-
-##### Extract default prior distributions
-
-```{r class.source = "fold-show"}
-model1 <- SHAREN ~ 1 + PP + AGE + GEN + (1 + INEG|ID/DAY)
-priors_1_default <- brms::get_prior(formula = model1, data = dataset)
-```
-
-##### Fit model using default priors
-
-```{r class.source = "fold-show"}
-fit1_b <- brms::brm(formula = model1, 
-                    data = dataset, 
-                    inits = "random",
-                    chains = chains,
-                    cores = cores, 
-                    prior = NULL,       # NULL for default priors
-                    warmup = warmup, 
-                    iter = iterations,
-                    seed = seed,
-                    sample_prior = "yes",
-                    control = list(adapt_delta = 0.999),
-                    save_pars = brms::save_pars(all = TRUE))
-```
-
-##### Inspect convergence of the chains
-
 ```{r}
-mt1 <- ggs(fit1_b)
-parameters_to_plot <- c("b_PP", "sd_ID__INEG")
 
-.plotCaterpillars(mt1, parameters = parameters_to_plot, warmup = 100)
-```
-
-##### Inspect parameter estimates
-
-```{r class.source = "fold-show"}
-summary(fit1_b, priors = TRUE)
-```
-
-##### Hypothesis 1: PP < 0
-
-```{r class.source = "fold-show"}
-hypothesis1_b <- brms::hypothesis(fit1_b, "PP < 0", class = "b")
-print(hypothesis1_b)
-```
-
-
-```{r}
-parameter <- "b_PP"
-p1 <- plot(hypothesis1_b, plot = F)[[1]]
-p2 <- ggplot(filter(mt1, Parameter == parameter, Iteration > 100), aes(x = value))+
-      geom_density(fill  = "yellow", alpha = .5)+
-      geom_vline(xintercept = 0, col  = "red", size = 1)+
-      scale_x_continuous(name   = "Value", limits = c(-200, 200)) + 
-      geom_vline(xintercept = summary(fit1_b)$fixed[2,3:4], col = "blue", linetype = 2) +
-      theme_light() +
-      labs(title = paste0("Posterior Density of ", parameter))
-grid.arrange(p1, p2, nrow = 1)
-```
-
-##### Hypothesis 6: INEG|ID > 0
-
-```{r, collapse = FALSE}
-hypothesis6_b <- brms::hypothesis(fit1_b, "INEG > 0", class = "sd", group = "ID")
-print(hypothesis6_b)
-```
-
-
-```{r, collapse = FALSE}
-parameter <- "sd_ID__INEG"
-p1 <- plot(hypothesis6_b, plot = F)[[1]]
-p2 <- ggplot(filter(mt1, Parameter == parameter, Iteration > 100), aes(x = value))+
-      geom_density(fill  = "yellow", alpha = .5)+
-      geom_vline(xintercept = 0, col  = "red", size = 1)+
-      scale_x_continuous(name   = "Value", limits = c(-10, 10)) + 
-      geom_vline(xintercept = summary(fit1_b)$random$ID[2,3:4], col = "blue", linetype = 2) +
-      theme_light() +
-      labs(title = paste0("Posterior Density of ", parameter))
-grid.arrange(p1, p2, nrow = 1)
-```
-
-#### Informed priors
-
-##### Specify informed prior distributions
-
-```{r class.source = "fold-show"}
+# Non-informative priors:
 #
-# Priors:
+# b_Intercept ~ Normal(0,100)
+# b_Age ~ Normal(0,100)
+# b_PP ~ Normal(0,100)
+# b_GEN2 ~ Normal(0,100)
+
+priorsni <- c(set_prior("normal(0,100)", class = "b", coef = "Intercept"),
+            set_prior("normal(0,100)", class = "b", coef = "AGE"),
+            set_prior("normal(0,100)", class = "b", coef = "PP"),
+            set_prior("normal(0,100)", class = "b", coef = "GEN2"))
+
+fit1_bni <- brms::brm(formula = model1b, 
+                    data      = dataset, 
+                    inits     = "random",
+                    chains    = chains,
+                    cores     = cores, 
+                    prior     = priorsni,
+                    warmup    = warmup, 
+                    iter      = iterations,
+                    seed      = seed,
+                    sample_prior = TRUE,
+                    control = list(adapt_delta = adapt_delta, 
+                                   max_treedepth = max_treedepth),
+                    save_pars = brms::save_pars(all = TRUE))
+
+# Informed priors:
+#
 # b_Intercept ~ Cauchy(-0.48, 0.85)
 # b_Age ~ Normal(-0.01, 0.05)
 # b_PP ~ Normal(-.26,.25)
-# b_GEN ~ Normal(0.45,.12)
+# b_GEN2 ~ Normal(0.45,.12)
 # sd_INEG_ID ~ Normal(0.48,.06)
 
-priors1 <- set_prior("cauchy(-.48,.85)", class = "b")
-priors1 <- c(priors1, set_prior("normal(-.01, .05)", class = "b", coef= "AGE"))
-priors1 <- c(priors1, set_prior("normal(-.26,.25)",  class = "b", coef= "PP"))
-priors1 <- c(priors1, set_prior("normal(0.45,.12)",  class = "b", coef= "GEN"))
-priors1 <- c(priors1, set_prior("normal(0.48,.06)",   class = "sd", coef= "INEG", group = "ID"))
+priorsi <- c(set_prior("cauchy(-.48,.85)", class = "b", coef = "Intercept"),
+            set_prior("normal(-.01, .05)", class = "b", coef = "AGE"),
+            set_prior("normal(-.26,.25)", class = "b", coef = "PP"),
+            set_prior("normal(0.45,.12)", class = "b", coef = "GEN2"),
+            set_prior("normal(0.48,.06)", class = "sd", coef = "INEG", group = "ID"))
+
+fit1_bi <- brms::brm(formula  = model1b, 
+                     data     = dataset, 
+                     inits    = "random",
+                     chains   = chains,
+                     cores    = cores, 
+                     prior    = priorsi,
+                     warmup   = warmup, 
+                     iter     = iterations,
+                     seed     = seed,
+                     sample_prior = TRUE,
+                     control = list(adapt_delta = adapt_delta, 
+                                    max_treedepth = max_treedepth),
+                     save_pars = brms::save_pars(all = TRUE))
+
 ```
 
-##### Fit model using informed priors
+#### Parameter estimates
 
-```{r class.source = "fold-show"}
-fit1_bi <- brms::brm(formula = model1, 
-                    data = dataset, 
-                    inits = "random",
-                    chains = chains,
-                    cores = cores, 
-                    prior = NULL,                  # NULL for default priors, priors1 for custom
-                    warmup = warmup, 
-                    iter = iterations,
-                    seed = seed,
-                    sample_prior = "yes",
-                    control = list(adapt_delta = 0.999),
-                    save_pars = brms::save_pars(all = TRUE))
-```
-
-##### Inspect convergence of the chains
+##### Non-informative priors
 
 ```{r}
-mt1i <- ggs(fit1_bi)
-parameters_to_plot <- c("b_PP", "sd_ID__INEG")
-
-.plotCaterpillars(mt1i, parameters = parameters_to_plot, warmup = 100)
+summary(fit1_bni)
 ```
 
-##### Inspect parameter estimates
+```{r}
+mcmc_plot(fit1_bni, type = "trace")
+```
 
-```{r class.source = "fold-show"}
+```{r}
+mcmc_plot(fit1_bni, type = "dens")
+```
+
+##### Informed priors
+
+```{r}
 summary(fit1_bi, priors = TRUE)
 ```
 
-##### Hypothesis 1: PP < 0
+```{r}
+mcmc_plot(fit1_bi, type = "trace")
+```
 
-```{r class.source = "fold-show"}
+```{r}
+mcmc_plot(fit1_bi, type = "dens")
+```
+
+#### Hypothesis tests
+
+##### Hypothesis 1: $\gamma_{10} < 0$
+
+```{r}
+hypothesis1_bni <- brms::hypothesis(fit1_bni, "PP < 0", class = "b")
 hypothesis1_bi <- brms::hypothesis(fit1_bi, "PP < 0", class = "b")
-print(hypothesis1_bi)
+tab <- data.frame("Priors" = c("Non-informative", "Informed"))
+tab <- cbind(tab, rbind(hypothesis1_bni$hypothesis, hypothesis1_bi$hypothesis))
+print(tab)
 ```
 
 
 ```{r}
-parameter <- "b_PP"
-p1 <- plot(hypothesis1_bi, plot = F)[[1]]
-p2 <- ggplot(filter(mt1i, Parameter == parameter, Iteration > 100), aes(x = value))+
-      geom_density(fill  = "yellow", alpha = .5)+
-      geom_vline(xintercept = 0, col  = "red", size = 1)+
-      scale_x_continuous(name   = "Value", limits = c(-200, 200)) + 
-      geom_vline(xintercept = summary(fit1_bi)$fixed[2,3:4], col = "blue", linetype = 2) +
-      theme_light() +
-      labs(title = paste0("Posterior Density of ", parameter))
+p1 <- .plotPosteriorModelPP(fit1_bni, title = bquote("Posterior density for "*gamma[10]*" [Uninformed]"), 
+                            xmin = -30, xmax = 30, color = "yellow")
+p2 <- .plotPosteriorModelPP(fit1_bi, title = bquote("Posterior density for "*gamma[10]*" [Informed]"), 
+                            xmin = -2, xmax = 2, color = "dodgerblue")
 grid.arrange(p1, p2, nrow = 1)
+```
+
+#### Influence of priors on $\gamma_{10}$
+
+```{r}
+posterior1 <- posterior_samples(fit1_bni, pars = "b_PP")
+posterior2 <- posterior_samples(fit1_bi, pars = "b_PP")
+
+posterior1.2 <- bind_rows("prior 1" = gather(posterior1),
+                            "prior 2" = gather(posterior2),
+                            .id = "id")
+
+p <- ggplot(data = posterior1.2,
+      mapping = aes(x = value, fill = id, colour = key, linetype = key, alpha = key)) +
+      geom_density(size = 0.8) +
+      geom_vline(xintercept = summary(fit1_f)$coefficients["PP", "Estimate"],
+                 size = .8, linetype = 2, col = "black") +
+      scale_x_continuous(name = "Value", limits = c(-5, 5))+
+      scale_y_continuous(name = "Density", limits = c(0, 3)) +
+      coord_cartesian(ylim = c(0, 5))+
+      scale_fill_manual(name   = "Densities",
+                        values = c("yellow", "dodgerblue"),
+                        labels = c("Non-informative ~ N(0, 100) prior",
+                                    "Informative ~ N(-.26,.25) prior")) +
+      scale_colour_manual(name   = 'Posterior/Prior',
+                          values = c("black","red"),
+                          labels = c("posterior", "prior"))+
+      scale_linetype_manual(name   ='Posterior/Prior',
+                        values = c("solid","dotted"),
+                        labels = c("posterior", "prior"))+
+      scale_alpha_discrete(name   = 'Posterior/Prior',
+                       range  = c(.7,.3),
+                       labels = c("posterior", "prior"))+
+      annotate(geom    = "text",
+                x = summary(fit1_f)$coefficients["PP", "Estimate"], y = -.13,
+           label  = paste0("LME estimate:  ",
+                           round(summary(fit1_f)$coefficients["PP", "Estimate"], 3)),
+           col    = "black",
+           family = theme_get()$text[["family"]],
+           size   = theme_get()$text[["size"]]/3.5,
+           fontface="italic")+
+      labs(title    = expression("Influence of (Informative) Priors on" ~ gamma[10]),
+       subtitle = "3 different densities of priors and posteriors and the LME estimate") +
+      geom_segment(x = -5, xend = 5, y = -Inf, yend = -Inf) +
+      geom_segment(x = -Inf, xend = -Inf, y = 0, yend = 5) +
+      theme_minimal() +
+      theme(panel.grid = element_blank(), axis.ticks = element_line())
+p
 ```
 
 ##### Hypothesis 6: INEG|ID > 0
 
-```{r, collapse = FALSE}
+```{r}
+hypothesis6_bni <- brms::hypothesis(fit1_bni, "INEG > 0", class = "sd", group = "ID")
 hypothesis6_bi <- brms::hypothesis(fit1_bi, "INEG > 0", class = "sd", group = "ID")
-print(hypothesis6_bi)
+tab <- data.frame("Priors" = c("Non-informative", "Informed"))
+tab <- cbind(tab, rbind(hypothesis6_bni$hypothesis, hypothesis6_bi$hypothesis))
+print(tab)
 ```
 
-
-```{r, collapse = FALSE}
-parameter <- "sd_ID__INEG"
-p1 <- plot(hypothesis6_bi, plot = F)[[1]]
-p2 <- ggplot(filter(mt1i, Parameter == parameter, Iteration > 100), aes(x = value))+
+```{r}
+p1 <- plot(hypothesis1_bi, plot = F)[[1]]
+p2 <- ggplot(filter(ggs(fit1_bi), Parameter == "b_PP", Iteration > 100), aes(x = value))+
       geom_density(fill  = "yellow", alpha = .5)+
       geom_vline(xintercept = 0, col  = "red", size = 1)+
-      scale_x_continuous(name   = "Value", limits = c(-10, 10)) + 
-      geom_vline(xintercept = summary(fit1_bi)$random$ID[2,3:4], col = "blue", linetype = 2) +
+      scale_x_continuous(name   = "Value", limits = c(-2, 2)) + 
+      geom_vline(xintercept = summary(fit1_bi)$fixed[2,3:4], col = "blue", linetype = 2) +
       theme_light() +
-      labs(title = paste0("Posterior Density of ", parameter))
+      labs(title = paste0("Posterior Density of ", "b_PP"))
 grid.arrange(p1, p2, nrow = 1)
 ```
 
-#### Influence of priors
+```{r}
+p <- ggplot()+
+    ggridges::geom_density_ridges(data  = posterior1, 
+                                aes(x      = value,
+                                    #y      = reorder(as.factor(class), meanperclass),
+                                    height = ..density.., 
+                                    fill   = ID),
+                                scale = 3, 
+                                alpha = .6)
+```
+
 
 ## Model 2: Sharing positive events
 
@@ -293,7 +374,7 @@ grid.arrange(p1, p2, nrow = 1)
 # Hypothesis 3: Talking more about daily positive events is not associated with psychopathology -> No population effect (PP = 0).
 # Hypothesis 8: Intensity of daily positive events is positively associated with sharing -> Positive group effect (IPOS/ID > 0).
 
-model2 <- SHAREN ~ PP + AGE + GEN + IPOS|ID/DAY
+model2 <- SHAREN ~ 1 + PP + AGE + GEN + (1 + IPOS|ID)
 ```
 
 ### Frequentist analysis
@@ -310,15 +391,15 @@ model2 <- SHAREN ~ PP + AGE + GEN + IPOS|ID/DAY
 # Hypothesis 2: Ruminating more about daily negative events is associated with higher psychopathology -> Positive population effect (PP > 0).
 # Hypothesis 5: Intensity of daily negative events is positively associated with rumination. -> Positive group effect (INEG/DAY > 0).
 
-model3 <- RUM ~ PP + AGE + GEN + INEG|ID/DAY
+model3 <- RUM ~ 1 + PP + AGE + GEN + (1 + INEG|ID)
 ```
 
 ### Frequentist analysis
 
 ```{r fit model 3}
-fit3_f <- lme4::lmer(formula = model3, data = dataset, control = ctrl)
-sum3_f <- summary(fit3_f)
-test3_f <- lmerTest::ranova(fit3_f)
+# fit3_f <- lme4::lmer(formula = model3, data = dataset, control = ctrl)
+# sum3_f <- summary(fit3_f)
+# test3_f <- lmerTest::ranova(fit3_f)
 ```
 
 ## Model 4: Savouring positive events
@@ -327,15 +408,15 @@ test3_f <- lmerTest::ranova(fit3_f)
 # Hypothesis 4: Savouring daily positive events is not associated with psychopathology. -> No population effect (PP = 0)
 # Hypothesis 7: Intensity of daily positive events is positively associated with savouring. -> Positive group effect (IPOS/DAY > 0)
 
-model4 <- SAV ~ PP + AGE + GEN + IPOS|ID/DAY
+model4 <- SAV ~ 1 + PP + AGE + GEN + (1 + IPOS|ID)
 ```
 
 ### Frequentist analysis
 
 ```{r fit model 4}
-fit4_f <- lme4::lmer(formula = model4, data = dataset, control = ctrl)
-sum4_f <- summary(fit4_f)
-test4_f <- lmerTest::ranova(fit4_f)
+# fit4_f <- lme4::lmer(formula = model4, data = dataset, control = ctrl)
+# sum4_f <- summary(fit4_f)
+# test4_f <- lmerTest::ranova(fit4_f)
 ```
 
 ## Model 5: Intensity negative events
@@ -343,7 +424,7 @@ test4_f <- lmerTest::ranova(fit4_f)
 ```{r specify model 5}
 # Hypothesis 9: Psychopathology is positively associated with the intensity of daily negative events. -> Positive population effect (PP > 0).
 
-model5 <- INEG ~ PP + AGE + GEN
+model5 <- INEG ~ 1 + PP + AGE + GEN
 ```
 
 ### Frequentist analysis
@@ -359,7 +440,7 @@ model5 <- INEG ~ PP + AGE + GEN
 ```{r specify model 6}
 # Hypothesis 10: Psychopathology is not associated with the intensity of daily positive events. -> No population effect (PP = 0).
 
-model6 <- IPOS ~ PP + AGE + GEN
+model6 <- IPOS ~ 1 + PP + AGE + GEN
 ```
 
 ### Frequentist analysis
