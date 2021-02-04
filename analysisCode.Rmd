@@ -1,0 +1,252 @@
+---
+title: "Preregistration ESM analysis code"
+author: "Anu Hiekkaranta & Koen Derks"
+output:
+  html_document:
+    toc: true
+    df_print: paged
+---
+
+```{r document options, echo = F}
+knitr::opts_chunk$set(warning = FALSE, message = FALSE, fig.align = "center")
+```
+
+
+```{r setup helper functions, echo = F}
+
+.plotCaterpillars <- function(mtfit, parameters){
+  p <- ggplot(filter(mtfit, Parameter %in% parameters),
+        aes(x   = Iteration, y   = value, col = as.factor(Chain)))+
+        geom_line() +
+        geom_vline(xintercept = 1000)+
+        facet_grid(Parameter ~ . , scale  = 'free_y', switch = 'y')+
+        labs(title = "Caterpillar Plots", col = "Chains")
+  return(p)
+}
+
+.plotPosterior <- function(model, mtfit, parameter, warmup = 1000){
+  p <- ggplot(filter(mtfit, Parameter == parameter, Iteration > warmup),
+       aes(x = value))+
+      geom_density(fill  = "yellow", alpha = .5)+
+      geom_vline(xintercept = 0, col  = "red", size = 1)+
+      scale_x_continuous(name   = "Value", limits = c(-1, 3)) + 
+      geom_vline(xintercept = summary(model)$fixed[1,3:4], col = "blue", linetype = 2) +
+      theme_light() +
+      labs(title = paste0("Posterior Density of ", parameter))
+  return(p)
+}
+```
+
+
+## 1. Setup
+
+### 1.1 Clear workspace
+
+```{r clear workspace}
+rm(list=ls())
+```
+
+### 1.2 Load required packages
+
+```{r load packages}
+library(lme4)		        # For frequentist hierarchical modeling
+library(lmerTest)	      # For testing effect in lme4
+library(brms) 	        # For Bayesian hierarchical modeling
+library(bayesplot)	    # For plotting the samples
+library(RColorBrewer)   # needed for some extra colours in one of the graphs
+library(ggmcmc)
+library(ggthemes)
+library(ggridges)
+```
+
+### 1.3 Read data
+
+```{r read data}
+setwd("C:/Users/derksk/OneDrive - NBU/Desktop/PhD/Side projects/preregistrationESM") # Set your working directory
+dataset <- read.csv(file = "CCP_pilot_resampled.csv", sep = ",")
+```
+
+## 2. Hypotheses and models
+
+### 2.1 Model 1: Sharing negative events
+
+```{r specify model 1}
+# Hypothesis 1: Talking more about daily negative events is associated with lower psychopathology -> Negative population effect (PP < 0).
+# Hypothesis 6: Intensity of daily negative events is positively associated with sharing -> Positive group effect (INEG/ID > 0).
+
+model1 <- SHAREN ~ PP + AGE + GEN + INEG|ID/DAY
+```
+
+### 2.2 Model 2: Sharing positive events
+
+```{r specify model 2}
+# Hypothesis 3: Talking more about daily positive events is not associated with psychopathology -> No population effect (PP = 0).
+# Hypothesis 8: Intensity of daily positive events is positively associated with sharing -> Positive group effect (IPOS/ID > 0).
+
+model2 <- SHAREN ~ PP + AGE + GEN + IPOS|ID/DAY
+```
+
+### 2.3 Model 3: Ruminating negative events
+
+```{r specify model 3}
+# Hypothesis 2: Ruminating more about daily negative events is associated with higher psychopathology -> Positive population effect (PP > 0).
+# Hypothesis 5: Intensity of daily negative events is positively associated with rumination. -> Positive group effect (INEG/DAY > 0).
+
+model3 <- RUM ~ PP + AGE + GEN + INEG|ID/DAY
+```
+
+### 2.4 Model 4: Savouring positive events
+
+```{r specify model 4}
+# Hypothesis 4: Savouring daily positive events is not associated with psychopathology. -> No population effect (PP = 0)
+# Hypothesis 7: Intensity of daily positive events is positively associated with savouring. -> Positive group effect (IPOS/DAY > 0)
+
+model4 <- SAV ~ PP + AGE + GEN + IPOS|ID/DAY
+```
+
+### 2.5 Model 5: Intensity negative events
+
+```{r specify model 5}
+# Hypothesis 9: Psychopathology is positively associated with the intensity of daily negative events. -> Positive population effect (PP > 0).
+
+model5 <- INEG ~ PP + AGE + GEN
+```
+
+### 2.6 Model 6: Intensity positive events
+
+```{r specify model 6}
+# Hypothesis 10: Psychopathology is not associated with the intensity of daily positive events. -> No population effect (PP = 0).
+
+model6 <- IPOS ~ PP + AGE + GEN
+```
+
+## 3. Frequentist analysis
+
+### 3.1 Specify the algorithmic options
+
+```{r specify lme4 control}
+ctrl <- lme4::lmerControl(optimizer = "optimx", calc.derivs = FALSE,
+                     optCtrl = list(method = "nlminb", starttests = FALSE, 
+                                         kkt = FALSE))
+```
+
+### 3.2 Fit models to data
+
+```{r fit lme4 models}
+fit1_f <- lme4::lmer(formula = model1, data = dataset, control = ctrl)
+# fit2_f <- lme4::lmer(formula = model2, data = dataset, control = ctrl)
+# fit3_f <- lme4::lmer(formula = model3, data = dataset, control = ctrl)
+# fit4_f <- lme4::lmer(formula = model4, data = dataset, control = ctrl)
+# fit5_f <- lme4::lmer(formula = model5, data = dataset, control = ctrl)
+# fit6_f <- lme4::lmer(formula = model5, data = dataset, control = ctrl)
+```
+
+
+### 3.3 Inspect model summary
+
+```{r inspect lme4 output}
+sum1_f <- summary(fit1_f)
+# sum2_f <- summary(fit2_f)
+# sum3_f <- summary(fit3_f)
+# sum4_f <- summary(fit4_f)
+# sum5_f <- summary(fit5_f)
+# sum6_f <- summary(fit6_f)
+```
+
+### 3.4 Extract p-values for hypothesis testing
+
+```{r run lme4 tests}
+test1_f <- lmerTest::ranova(fit1_f)
+# test2_f <- lmerTest::ranova(fit2_f)
+# test3_f <- lmerTest::ranova(fit3_f)
+# test4_f <- lmerTest::ranova(fit4_f)
+# test5_f <- lmerTest::ranova(fit5_f)
+# test6_f <- lmerTest::ranova(fit6_f)
+```
+
+## 4. Bayesian analysis
+
+### 4.1 Extract default prior distributions
+
+```{r}
+priors_1_default <- brms::get_prior(formula = model1, data = dataset)
+```
+
+### 4.2 Specify prior distributions
+
+#### 4.2.1 Model 1: Sharing negative events
+
+```{r}
+priors1 <- set_prior("cauchy(-.48,.85)", class = "b")
+priors1 <- c(priors1, set_prior("normal(-.01, .05)", class = "b", coef= "AGE"))
+priors1 <- c(priors1, set_prior("normal(-.26,.25)",  class = "b", coef= "PP"))
+priors1 <- c(priors1, set_prior("normal(0.45,.12)",  class = "b", coef= "GEN", group = "ID"))
+priors1 <- c(priors1, set_prior("normal(0.48,.06)",   class = "sd", coef= "INEG", group = "ID"))
+```
+
+### 4.3 Fit models to data
+
+```{r}
+fit1_b <- brms::brm(formula = model1, 
+                    data = dataset, 
+			              inits = "random",
+                    chains = 4,                    # Number of independent chains
+                    cores = 4, 
+                    prior = NULL,                  # NULL for default priors, priors1 for custom
+                    warmup = 100, # 1000, 
+                    iter = 500, # 5000,
+                    seed = 1,
+                    sample_prior = "yes",
+                    control = list(adapt_delta = 0.999),
+                    save_pars = brms::save_pars(group = TRUE))
+```
+
+### 4.4 Inspect convergence of chains
+
+```{r}
+mt1 <- ggs(fit1_b)
+parameters_to_plot <- c("sd_ID__PP", "sd_ID:DAY__INEG")
+
+.plotCaterpillars(mt1, parameters = parameters_to_plot)
+```
+
+### 4.5 Inspect model summary
+
+```{r}
+sum1_b <- summary(fit1_b, priors = TRUE)
+```
+
+### 4.6 Plot the most important posterior distributions
+
+#### 4.6.1 Model 1: Sharing negative events
+
+```{r}
+.plotPosterior(fit1_b, mt1, parameter = "sd_ID__PP", warmup = 100)
+.plotPosterior(fit1_b, mt1, parameter = "sd_ID:DAY__INEG", warmup = 100)
+```
+
+### 4.7 Extract posterior probabilities for hypothesis testing
+
+#### 4.7.1 Model 1: Sharing negative events
+
+```{r}
+hypothesis1_b <- brms::hypothesis(fit1_b, "PP = 0", class = "sd", group = "ID")
+hypothesis6_b <- brms::hypothesis(fit1_b, "INEG > 0", class = "sd", group = "ID")
+```
+
+## 5. Create results table
+
+```{r}
+results <- data.frame(Hypothesis = 1:10, 
+                      Model = c(1, NA, NA, NA, NA, 1, NA, NA, NA, NA), 
+                      Restriction = numeric(10), 
+                      pval = numeric(10), 
+                      er = numeric(10)) 
+results$Restriction[c(1, 6)] <- c("PP = 0", 
+                                  "INEG > 0")
+results$pval[c(1, 6)] <- c(test1_f$`Pr(>Chisq)`[6],
+                           test1_f$`Pr(>Chisq)`[9])
+results$er[c(1, 6)] <- c(hypothesis1_b$hypothesis[6], 
+                          hypothesis6_b$hypothesis[6])
+print(results)
+```
