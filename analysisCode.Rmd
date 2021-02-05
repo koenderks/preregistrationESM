@@ -271,6 +271,7 @@ grid.arrange(p1, p2, nrow = 1)
 ```{r}
 fit1_f  <- lme4::lmer(formula = model1f, data = dataset, control = ctrl)
 sum1_f  <- summary(fit1_f)
+print(sum1_f)
 ``` 
 
 ##### ANOVA test for fixed effects 
