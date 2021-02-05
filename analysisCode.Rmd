@@ -167,12 +167,15 @@ The data set contains the following variables:
 # Start by reading in the data set
 fulldata <- read.csv(file = "https://raw.githubusercontent.com/koenderks/preregistrationESM/master/CCP_pilot_resampled.csv", sep = ",")
 
-# Correct column types for data
+# Select only the columns that are required for these analyses
+fulldata <- fulldata[, c("ID", "INEG", "IPOS", "RUM", "SAV", "SHAREN", "SHAREP", "PP", "GEN", "AGE", "DAY")]
+
+# Make factor variables for ID, DAY, and GEN
 fulldata$ID   <- as.factor(fulldata$ID)
 fulldata$DAY  <- as.factor(fulldata$DAY)
 fulldata$GEN  <- as.factor(fulldata$GEN)
 
-# Standardize numeric variables
+# Standardize the other numeric variables
 fulldata <- .scaleNumericData(fulldata)
 
 # Inspect the data set
@@ -181,20 +184,23 @@ head(fulldata)
 
 # Hypotheses
 
-- Hypothesis 1: Talking more about daily negative events is associated with lower psychopathology
-- Hypothesis 2:
-- Hypothesis 3:
-- Hypothesis 4:
-- Hypothesis 5:
-- Hypothesis 6: Intensity of daily negative events is positively associated with sharing
-- Hypothesis 7:
-- Hypothesis 8:
-- Hypothesis 9:
-- Hypothesis 10:
+The hypotheses for the experiment are the following:
+
+- Hypothesis 1:  Sharing negative daily events is positively associated with psychopathology ($PP_{\uparrow} \rightarrow SHAREN_{\uparrow}$),
+- Hypothesis 2:  Ruminating about daily negative events is positively associated with psychopathology ($PP_{\uparrow} \rightarrow RUM_{\uparrow}$),
+- Hypothesis 3:  Sharing daily positive events is not associated with psychopathology ($PP_{\uparrow} \rightarrow SHAREP_{-}$),
+- Hypothesis 4:  Savouring daily positive events is not associated with psychopathology ($PP_{\uparrow} \rightarrow SAV_{-}$),
+- Hypothesis 5:  Intensity of daily negative events is positively associated with rumination ($INEG_{\uparrow} \rightarrow RUM_{\uparrow}$),
+- Hypothesis 6:  Intensity of daily negative events is positively associated with sharing ($INEG_{\uparrow} \rightarrow SHAREN_{\uparrow}$),
+- Hypothesis 7:  Intensity of daily positive events is positively associated with savouring ($IPOS_{\uparrow} \rightarrow SAV_{\uparrow}$),
+- Hypothesis 8:  Intensity of daily positive events is positively associated with sharing ($IPOS_{\uparrow} \rightarrow SHAREP_{\uparrow}$),
+- Hypothesis 9:  Psychopathology is positively associated with the intensity of daily negative events ($PP_{\uparrow} \rightarrow INEG_{\uparrow}$),
+- Hypothesis 10: Psychopathology is not associated with the intensity of daily positive events ($PP_{\uparrow} \rightarrow IPOS_{-}$).
+
 
 # Analyses
 
-Below we will outline six models in order to assert the evidence in the data for these hypotheses.
+Below we will outline the six models we will use to find out to what degree the data contain support for any of the hypotheses.
 
 ## Model 1: Sharing negative events
 
@@ -205,7 +211,7 @@ The regression formula for this model is:
 
 $$SHAREN_{ij} = \gamma_{00} + \gamma_{10} \cdot PP_{ij} + \gamma_{20} \cdot AGE_{ij} + \gamma_{30} \cdot GEN_{{M}_{ij}} + \gamma_{40} \times INEG_{ij} + u_{4j} \cdot INEG_{ij} + u_{0j} + \epsilon_{ij},$$
 
-in which observation $i$ from participant $j$ is predicted.
+in which observation $i$ from participant $j$ is predicted by a population-level intercept and coefficients for $PP$, $AGE$, $GEN_M$ and $INEG$ and a person-level intercept and random coefficient for $INEG$.
 
 ```{r class.source = "fold-show"}
 
@@ -230,6 +236,8 @@ dataset <- fulldata[!is.na(fulldata$INEG), ]
 ```
 
 ### Data visualization
+
+First we visualize the data to get a better impression of the effects under investigation.
 
 ```{r}
 p1 <- ggplot(data = dataset, aes(x = PP, y = SHAREN)) +
@@ -265,13 +273,17 @@ fit1_f  <- lme4::lmer(formula = model1f, data = dataset, control = ctrl)
 sum1_f  <- summary(fit1_f)
 ``` 
 
-##### Test for fixed effects 
+##### ANOVA test for fixed effects 
+
+By assessing the fixed effects in the model we are able to say something about the main effects.
 
 ```{r}
 test1_f <- car::Anova(fit1_f)
 print(test1_f)
 ```
-##### Test for random effects
+##### ANOVA test for removal of random effects
+
+By removing the random effect from the model, we can inspect whether it produced a better fit.
 
 ```{r}
 test1_f2 <- lmerTest::ranova(fit1_f)
@@ -461,7 +473,7 @@ p <- ggplot(data = posterior1.2,
            size   = theme_get()$text[["size"]]/3.5,
            fontface="italic")+
       labs(title    = expression("Influence of (Informative) Priors on" ~ gamma[10]),
-       subtitle = "3 different densities of priors and posteriors and the LME estimate") +
+       subtitle = "2 different densities of priors and posteriors and the LME estimate") +
       geom_segment(x = -5, xend = 5, y = -Inf, yend = -Inf) +
       geom_segment(x = -Inf, xend = -Inf, y = 0, yend = 5) +
       theme_minimal() +
@@ -517,6 +529,8 @@ p <- ggplot() +
       viridis::scale_fill_viridis(discrete = TRUE) +
       labs(title = expression(paste("ID Level Deviation of Regression Coefficient of INEG on SHARIN (", u["4j"],")")),
            subtitle = expression(paste("Posterior distribution of deviation of regression coefficient (", u["4j"],") per ID with the means in red"))) +
+      annotate(geom = "text", x = 1.5, y = 0.5, label = "Grand mean", col = "red", family = theme_get()$text[["family"]], 
+           size = theme_get()$text[["size"]]/3, fontface = "italic") +
       theme_minimal() +
       theme(panel.grid = element_blank(), axis.ticks = element_line())
 print(p)
