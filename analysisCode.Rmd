@@ -110,26 +110,34 @@ adapt_delta     <- 0.999         # Target acceptance rate of samples
 .plotFixedCoefficients <- function(fit, title, xmin, xmax, warmup){
   mtfit <- ggs(fit)
   sumFixed <- summary(fit)$fixed
-  p <- ggplot(filter(mtfit, Parameter %in% c("b_Intercept", "b_PP","b_AGE"), Iteration > warmup),
-              aes(x = value, fill = Parameter))+
+  plotData <- filter(mtfit, Parameter %in% c("b_Intercept", "b_PP","b_AGE", "b_GEN2", "b_INEG"), Iteration > warmup)
+  plotData$Parameter <- factor(plotData$Parameter, levels = c("b_Intercept", "b_PP","b_AGE", "b_GEN2", "b_INEG"))
+  p <- ggplot(plotData,
+              aes(x = value, fill = Parameter)) +
               geom_density(alpha = .5) +
               labs(title = title) +
               geom_vline(xintercept = 0, col = "red", size = 1) +
               scale_x_continuous(name   = "Value", limits = c(xmin, xmax)) + 
               scale_y_continuous(name = "Density") +
-              geom_segment(x = sumFixed[1,3], xend = sumFixed[1,3], y = 0, yend = Inf, col = "dodgerblue", linetype = 2) +
-              geom_segment(x = sumFixed[1,4], xend = sumFixed[1,4], y = 0, yend = Inf, col = "dodgerblue", linetype = 2) +
-              geom_segment(x = sumFixed[2,3], xend = sumFixed[2,3], y = 0, yend = Inf, col = "red", linetype = 2) +
-              geom_segment(x = sumFixed[2,4], xend = sumFixed[2,4], y = 0, yend = Inf, col = "red", linetype = 2) +
-              geom_segment(x = sumFixed[3,3], xend = sumFixed[3,3], y = 0, yend = Inf, col = "darkgreen", linetype = 2) +
-              geom_segment(x = sumFixed[3,4], xend = sumFixed[3,4], y = 0, yend = Inf, col = "darkgreen", linetype = 2) +
+              geom_segment(x = sumFixed[1,3], xend = sumFixed[1,3], y = 0, yend = Inf, col = "darkgreen", linetype = 2) +
+              geom_segment(x = sumFixed[1,4], xend = sumFixed[1,4], y = 0, yend = Inf, col = "darkgreen", linetype = 2) +
+              geom_segment(x = sumFixed[2,3], xend = sumFixed[2,3], y = 0, yend = Inf, col = "yellow", linetype = 2) +
+              geom_segment(x = sumFixed[2,4], xend = sumFixed[2,4], y = 0, yend = Inf, col = "yellow", linetype = 2) +
+              geom_segment(x = sumFixed[3,3], xend = sumFixed[3,3], y = 0, yend = Inf, col = "red", linetype = 2) +
+              geom_segment(x = sumFixed[3,4], xend = sumFixed[3,4], y = 0, yend = Inf, col = "red", linetype = 2) +
+              geom_segment(x = sumFixed[4,3], xend = sumFixed[4,3], y = 0, yend = Inf, col = "dodgerblue", linetype = 2) +
+              geom_segment(x = sumFixed[4,4], xend = sumFixed[4,4], y = 0, yend = Inf, col = "dodgerblue", linetype = 2) +
+              geom_segment(x = sumFixed[5,3], xend = sumFixed[5,3], y = 0, yend = Inf, col = "purple", linetype = 2) +
+              geom_segment(x = sumFixed[5,4], xend = sumFixed[5,4], y = 0, yend = Inf, col = "purple", linetype = 2) +
               geom_segment(x = xmin, xend = xmax, y = -Inf, yend = -Inf) +
               geom_segment(x = -Inf, xend = -Inf, y = 0, yend = 20) +
-              scale_fill_manual(name   =  'Parameters', 
-                               values = c("darkgreen","dodgerblue", "red"), 
+              scale_fill_manual(name  = 'Parameters', 
+                               values = c("darkgreen","yellow", "red", "dodgerblue", "purple"), 
                                labels = c(expression(gamma['00']), 
                                           expression(gamma['10']),  
-                                          expression(gamma['20']))) +
+                                          expression(gamma['20']),
+                                          expression(gamma['30']),
+                                          expression(gamma['40']))) +
             theme_minimal() +
       theme(panel.grid = element_blank(), axis.ticks = element_line())
   return(p)
@@ -195,7 +203,7 @@ Below we will outline six models in order to assert the evidence in the data for
 
 The regression formula for this model is:
 
-$$SHAREN_{ij} = \gamma_{00} + \gamma_{10} \cdot PP_{ij} + \gamma_{20} \cdot AGE_{ij} + \gamma_{30} \cdot GEN_{{M}_{ij}} + u_{4j} \cdot INEG_{ij} + \epsilon_{ij},$$
+$$SHAREN_{ij} = \gamma_{00} + \gamma_{10} \cdot PP_{ij} + \gamma_{20} \cdot AGE_{ij} + \gamma_{30} \cdot GEN_{{M}_{ij}} + \gamma_{40} \times INEG_{ij} + u_{4j} \cdot INEG_{ij} + u_{0j} + \epsilon_{ij},$$
 
 in which observation $i$ from participant $j$ is predicted.
 
@@ -207,13 +215,13 @@ in which observation $i$ from participant $j$ is predicted.
 #
 # Hypothesis 6: 
 # Intensity of daily negative events is positively associated with sharing 
-# -> Positive group effect (INEG|ID > 0).
+# -> Positive population effect (INEG > 0).
 # 
 # Model:
-# SHAREN ~ 1 + PP + AGE + GEN + (1 + INEG|ID)
+# SHAREN ~ 1 + PP + AGE + GEN + INEG + (1 + INEG|ID)
 
-model1f <- SHAREN ~ 1 + PP + AGE + (1 + INEG|ID)
-model1b <- SHAREN ~ 0 + Intercept + PP + AGE + GEN + (1 + INEG|ID)
+model1f <- SHAREN ~ 1 + PP + AGE + INEG + (1 + INEG|ID)
+model1b <- SHAREN ~ 0 + Intercept + PP + AGE + GEN + INEG + (1 + INEG|ID)
 ```
 
 ```{r}
@@ -279,7 +287,8 @@ The non-informative set of priors consists of:
 $$\gamma_{00} \sim N(0, 10) \\
   \gamma_{10} \sim N(0, 10) \\
   \gamma_{20} \sim N(0, 10) \\ 
-  \gamma_{30} \sim N(0, 10)$$
+  \gamma_{30} \sim N(0, 10) \\
+  \gamma_{40} \sim N(0, 10)$$
 
 The informed set of priors consists of: 
 
@@ -287,6 +296,7 @@ $$\gamma_{00} \sim Cauchy(-0.48, 0.85) \\
   \gamma_{10} \sim N(-.26,.25) \\
   \gamma_{20} \sim N(-0.01, 0.05) \\ 
   \gamma_{30} \sim N(0.45,.12) \\
+  \gamma_{40} \sim N(0, 10) \\
   \sigma_{u_{4j}} \sim N(0.48,.06)$$
 
 ```{r}
@@ -297,11 +307,13 @@ $$\gamma_{00} \sim Cauchy(-0.48, 0.85) \\
 # b_Age ~ Normal(0,10)
 # b_PP ~ Normal(0,10)
 # b_GEN2 ~ Normal(0,10)
+# b_INEG ~ Normal(0, 10)
 
 priorsni <- c(set_prior("normal(0,10)", class = "b", coef = "Intercept"),
             set_prior("normal(0,10)", class = "b", coef = "AGE"),
             set_prior("normal(0,10)", class = "b", coef = "PP"),
-            set_prior("normal(0,10)", class = "b", coef = "GEN2"))
+            set_prior("normal(0,10)", class = "b", coef = "GEN2"),
+            set_prior("normal(0, 10)", class = "b", coef = "INEG"))
 
 fit1_bni <- brms::brm(formula = model1b, 
                     data      = dataset, 
@@ -323,12 +335,14 @@ fit1_bni <- brms::brm(formula = model1b,
 # b_Age ~ Normal(-0.01, 0.05)
 # b_PP ~ Normal(-.26,.25)
 # b_GEN2 ~ Normal(0.45,.12)
+# b_INEG ~ Normal(0, 10)
 # sd_INEG_ID ~ Normal(0.48,.06)
 
 priorsi <- c(set_prior("cauchy(-.48,.85)", class = "b", coef = "Intercept"),
             set_prior("normal(-.01, .05)", class = "b", coef = "AGE"),
             set_prior("normal(-.26,.25)", class = "b", coef = "PP"),
             set_prior("normal(0.45,.12)", class = "b", coef = "GEN2"),
+            set_prior("normal(0, 10)", class = "b", coef = "INEG"),
             set_prior("normal(0.48,.06)", class = "sd", coef = "INEG", group = "ID"))
 
 fit1_bi <- brms::brm(formula  = model1b, 
@@ -409,7 +423,7 @@ p2 <- .plotPosteriorModelPP(fit1_bi, title = bquote("Posterior density for "*gam
 grid.arrange(p1, p2, nrow = 1)
 ```
 
-```{r, eval = F}
+```{r}
 posterior1 <- posterior_samples(fit1_bni, pars = "b_PP")
 posterior2 <- posterior_samples(fit1_bi, pars = "b_PP")
 
@@ -455,11 +469,13 @@ p <- ggplot(data = posterior1.2,
 print(p)
 ```
 
-##### Hypothesis 6: $\sigma_{{u_{4j}}$ > 0
+##### Hypothesis 6: $\gamma_{40}$ > 0
 
 ```{r}
-hypothesis6_bni <- brms::hypothesis(fit1_bni, "INEG > 0", class = "sd", group = "ID")
-hypothesis6_bi <- brms::hypothesis(fit1_bi, "INEG > 0", class = "sd", group = "ID")
+# hypothesis6_bni <- brms::hypothesis(fit1_bni, "INEG > 0", class = "sd", group = "ID")
+# hypothesis6_bi <- brms::hypothesis(fit1_bi, "INEG > 0", class = "sd", group = "ID")
+hypothesis6_bni <- brms::hypothesis(fit1_bni, "INEG > 0", class = "b")
+hypothesis6_bi <- brms::hypothesis(fit1_bi, "INEG > 0", class = "b")
 tab <- data.frame("Priors" = c("Non-informative", "Informed"))
 tab <- cbind(tab, rbind(hypothesis6_bni$hypothesis, hypothesis6_bi$hypothesis))
 print(tab)
@@ -499,8 +515,8 @@ p <- ggplot() +
       scale_x_continuous(name = "Value", limits = c(-5, 10)) + 
       scale_y_discrete(name = "ID") +
       viridis::scale_fill_viridis(discrete = TRUE) +
-      labs(title = expression(paste("ID Level Error of Regression Coefficient of INEG on SHARIN (", u["4j"],")")),
-           subtitle = expression(paste("Posterior distribution of ID level error of regression coefficient (", u["4j"],") per ID with the means in red"))) +
+      labs(title = expression(paste("ID Level Deviation of Regression Coefficient of INEG on SHARIN (", u["4j"],")")),
+           subtitle = expression(paste("Posterior distribution of deviation of regression coefficient (", u["4j"],") per ID with the means in red"))) +
       theme_minimal() +
       theme(panel.grid = element_blank(), axis.ticks = element_line())
 print(p)
