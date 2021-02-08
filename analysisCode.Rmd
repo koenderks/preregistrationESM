@@ -12,15 +12,17 @@ output:
 
 In this document we will describe the planned analyses for the experiment. To illustrate these analyses we will use an example data set, which is to be replaced when data collection has ended.
 
-```{r document options, echo = F}
+```{r Setting document options, echo = F}
+
 # First we set some global document options so as that messages from R are not shown in the output
 knitr::opts_chunk$set(warning = FALSE, 
                       message = FALSE, 
                       fig.align = "center", 
                       fig.width = 10)
+
 ```
 
-```{r setup options}
+```{r Setting up global r environment}
 
 # Clear the workspace
 rm(list=ls())
@@ -64,27 +66,104 @@ adapt_delta     <- 0.999         # Target acceptance rate of samples
   return(x)
 }
 
-.plotPosteriorModelPP <- function(fit, title, xmin, xmax, color){
+# Create a function to visualize the posterior distributions of the fixed effects
+.plotPopulationEffectDensities <- function(fit, title, xmin, xmax, warmup){
+  colorValues <- c("darkorange1", "gold", "khaki4", "turquoise4", "mediumpurple3")
+  mtfit <- ggs(fit)
   sumFixed <- summary(fit)$fixed
-  p <- ggplot(filter(ggs(fit), Parameter == "b_PP", Iteration > warmup), aes(x = value)) +
-      geom_segment(x = 0, xend = 0, y = Inf, yend = 0, col = "red") +
-      geom_segment(x = sumFixed[2,1], xend = sumFixed[2,1], 
-                   y = Inf, yend = 0, col = "blue") +
-      geom_segment(x = sumFixed[2,3], xend = sumFixed[2,3], 
-                   y = Inf, yend = 0, col = "blue", linetype = 2) +
-      geom_segment(x = sumFixed[2,4], xend = sumFixed[2,4], 
-                         y = Inf, yend = 0, col = "blue", linetype = 2) +
-      geom_density(fill  = color, alpha = .05) +
-      scale_x_continuous(name = "Value", limits = c(xmin, xmax), breaks = pretty(c(xmin, xmax, 0))) + 
-      scale_y_continuous(name = "Density") +
-      labs(title = title) +
-      geom_segment(x = xmin, xend = xmax, y = -Inf, yend = -Inf) +
-      geom_segment(x = -Inf, xend = -Inf, y = 0, yend = 20) +
-      theme_minimal() +
+  parameters <- paste0("b_", rownames(sumFixed))
+  plotData <- filter(mtfit, Parameter %in% parameters, Iteration > warmup)
+  plotData$Parameter <- factor(plotData$Parameter, levels = parameters)
+  p <- ggplot(plotData,
+              aes(x = value, fill = Parameter)) +
+              geom_density(alpha = .5) +
+              labs(title = title) +
+              geom_segment(x = 0, xend = 0, y = 0, yend = Inf, colour = "red", linetype = "solid", size = 0.5) + 
+              scale_x_continuous(name   = "Value", limits = c(xmin, xmax)) + 
+              scale_y_continuous(name = "Density") +
+              geom_segment(x = sumFixed[1,3], xend = sumFixed[1,3], y = 0, yend = Inf, 
+                           col = colorValues[1], linetype = 2) +
+              geom_segment(x = sumFixed[1,4], xend = sumFixed[1,4], y = 0, yend = Inf, 
+                           col = colorValues[1], linetype = 2) +
+              geom_segment(x = sumFixed[2,3], xend = sumFixed[2,3], y = 0, yend = Inf, 
+                           col = colorValues[2], linetype = 2) +
+              geom_segment(x = sumFixed[2,4], xend = sumFixed[2,4], y = 0, yend = Inf, 
+                           col = colorValues[2], linetype = 2) +
+              geom_segment(x = sumFixed[3,3], xend = sumFixed[3,3], y = 0, yend = Inf, 
+                           col = colorValues[3], linetype = 2) +
+              geom_segment(x = sumFixed[3,4], xend = sumFixed[3,4], y = 0, yend = Inf, 
+                           col = colorValues[3], linetype = 2) +
+              geom_segment(x = sumFixed[4,3], xend = sumFixed[4,3], y = 0, yend = Inf, 
+                           col = colorValues[4], linetype = 2) +
+              geom_segment(x = sumFixed[4,4], xend = sumFixed[4,4], y = 0, yend = Inf, 
+                           col = colorValues[4], linetype = 2) +
+              geom_segment(x = sumFixed[5,3], xend = sumFixed[5,3], y = 0, yend = Inf, 
+                           col = colorValues[5], linetype = 2) +
+              geom_segment(x = sumFixed[5,4], xend = sumFixed[5,4], y = 0, yend = Inf, 
+                           col = colorValues[5], linetype = 2) +
+              geom_segment(x = xmin, xend = xmax, y = -Inf, yend = -Inf) +
+              geom_segment(x = -Inf, xend = -Inf, y = 0, yend = 20) +
+              scale_fill_manual(name  = 'Parameters', 
+                               values = colorValues, 
+                               labels = c(expression(gamma['00']), 
+                                          expression(gamma['10']),  
+                                          expression(gamma['20']),
+                                          expression(gamma['30']),
+                                          expression(gamma['40']))) +
+            theme_minimal() +
       theme(panel.grid = element_blank(), axis.ticks = element_line())
   return(p)
 }
 
+# Create a function to visualize the non-informed and informed prior and posterior distributions
+.plotInfluenceOfPriors <- function(coef, fit_f, fit_ni, fit_i, title, priors, xmin, xmax, ymax){
+  
+  lmeEst <- summary(fit1_f)$coefficients[coef, "Estimate"]
+  sumFixedni <- summary(fit1_bni)$fixed
+  sumFixedi <- summary(fit1_bi)$fixed
+  
+  posterior1 <- posterior_samples(fit1_bni, pars = paste0("b_", coef))
+  posterior2 <- posterior_samples(fit1_bi, pars = paste0("b_", coef))
+  posterior1.2 <- bind_rows("prior 1" = gather(posterior1), "prior 2" = gather(posterior2), .id = "id")
+  
+  colorValues <- c("skyblue", "seagreen")
+  row <- which(rownames(sumFixedi) == coef)
+  
+  p <- ggplot(data = posterior1.2,
+        mapping = aes(x = value, fill = id, colour = key, linetype = key, alpha = key)) +
+        geom_segment(x = 0, xend = 0, y = 0, yend = Inf, colour = "red", 
+                     linetype = "solid", alpha = 1, size = 0.5) + 
+        geom_segment(x = lmeEst, xend = lmeEst, y = 0, yend = Inf, colour = "black", 
+                     linetype = "dashed", alpha = 1, size = 0.5) +      
+        annotate(geom = "text", x = lmeEst, y = ymax - 0.2, hjust = -0.1,
+                 label = paste0("LME estimate: ", round(lmeEst, 3)),
+                 col = "black", family = theme_get()$text[["family"]], size = theme_get()$text[["size"]]/3.5,
+                 fontface="italic") +
+        geom_density(size = 0.75) +
+        scale_x_continuous(name = "Value", limits = c(xmin, xmax)) +
+        scale_y_continuous(name = "Density", limits = c(0, ymax), breaks = pretty(c(0, ymax))) +
+        scale_fill_manual(name = "Densities", values = colorValues, labels = priors) +
+        scale_colour_manual(name = 'Posterior/Prior', values = c("black","red"), labels = c("posterior", "prior"))+
+        scale_linetype_manual(name ='Posterior/Prior', values = c("solid","dotted"), labels = c("posterior", "prior"))+
+        scale_alpha_discrete(name = 'Posterior/Prior', range  = c(.7,.3), labels = c("posterior", "prior"))+
+        labs(title = title,
+             subtitle = "2 different densities of priors and posteriors and the LME estimate") +
+        geom_segment(x = xmin, xend = xmax, y = -Inf, yend = -Inf, colour = "black", linetype = "solid", alpha = 1) +
+        geom_segment(x = -Inf, xend = -Inf, y = 0, yend = ymax, colour = "black", linetype = "solid", alpha = 1) +
+        geom_segment(x = sumFixedni[row,3], xend = sumFixedni[row,3], y = 0, yend = Inf, 
+                     col = colorValues[1], linetype = "dashed", alpha = 1) +
+        geom_segment(x = sumFixedni[row,4], xend = sumFixedni[row,4], y = 0, yend = Inf, 
+                     col = colorValues[1], linetype = "dashed", alpha = 1) +
+        geom_segment(x = sumFixedi[row,3], xend = sumFixedi[row,3], y = 0, yend = Inf, 
+                     col = colorValues[2], linetype = "dashed", alpha = 1) +
+        geom_segment(x = sumFixedi[row,4], xend = sumFixedi[row,4], y = 0, yend = Inf, 
+                     col = colorValues[2], linetype = "dashed", alpha = 1) +
+        theme_minimal() +
+        theme(panel.grid = element_blank(), axis.ticks = element_line())
+  return(p) 
+}
+
+# Create a function to visualize the posterior distribution of the random slopes standard deviation
 .plotPosteriorModelSD <- function(fit, var, title, xmin, xmax, color){
   parName <- paste0("sd_ID__", var)
   sumRandom <- summary(fit)$random$ID
@@ -107,62 +186,66 @@ adapt_delta     <- 0.999         # Target acceptance rate of samples
   return(p)
 }
 
-.plotFixedCoefficients <- function(fit, title, xmin, xmax, warmup){
-  mtfit <- ggs(fit)
-  sumFixed <- summary(fit)$fixed
-  plotData <- filter(mtfit, Parameter %in% c("b_Intercept", "b_PP","b_AGE", "b_GEN2", "b_INEG"), Iteration > warmup)
-  plotData$Parameter <- factor(plotData$Parameter, levels = c("b_Intercept", "b_PP","b_AGE", "b_GEN2", "b_INEG"))
-  p <- ggplot(plotData,
-              aes(x = value, fill = Parameter)) +
-              geom_density(alpha = .5) +
-              labs(title = title) +
-              geom_vline(xintercept = 0, col = "red", size = 1) +
-              scale_x_continuous(name   = "Value", limits = c(xmin, xmax)) + 
-              scale_y_continuous(name = "Density") +
-              geom_segment(x = sumFixed[1,3], xend = sumFixed[1,3], y = 0, yend = Inf, col = "darkgreen", linetype = 2) +
-              geom_segment(x = sumFixed[1,4], xend = sumFixed[1,4], y = 0, yend = Inf, col = "darkgreen", linetype = 2) +
-              geom_segment(x = sumFixed[2,3], xend = sumFixed[2,3], y = 0, yend = Inf, col = "yellow", linetype = 2) +
-              geom_segment(x = sumFixed[2,4], xend = sumFixed[2,4], y = 0, yend = Inf, col = "yellow", linetype = 2) +
-              geom_segment(x = sumFixed[3,3], xend = sumFixed[3,3], y = 0, yend = Inf, col = "red", linetype = 2) +
-              geom_segment(x = sumFixed[3,4], xend = sumFixed[3,4], y = 0, yend = Inf, col = "red", linetype = 2) +
-              geom_segment(x = sumFixed[4,3], xend = sumFixed[4,3], y = 0, yend = Inf, col = "dodgerblue", linetype = 2) +
-              geom_segment(x = sumFixed[4,4], xend = sumFixed[4,4], y = 0, yend = Inf, col = "dodgerblue", linetype = 2) +
-              geom_segment(x = sumFixed[5,3], xend = sumFixed[5,3], y = 0, yend = Inf, col = "purple", linetype = 2) +
-              geom_segment(x = sumFixed[5,4], xend = sumFixed[5,4], y = 0, yend = Inf, col = "purple", linetype = 2) +
-              geom_segment(x = xmin, xend = xmax, y = -Inf, yend = -Inf) +
-              geom_segment(x = -Inf, xend = -Inf, y = 0, yend = 20) +
-              scale_fill_manual(name  = 'Parameters', 
-                               values = c("darkgreen","yellow", "red", "dodgerblue", "purple"), 
-                               labels = c(expression(gamma['00']), 
-                                          expression(gamma['10']),  
-                                          expression(gamma['20']),
-                                          expression(gamma['30']),
-                                          expression(gamma['40']))) +
-            theme_minimal() +
-      theme(panel.grid = element_blank(), axis.ticks = element_line())
+# Create a function to visualize the individual posterior distributions of the random slopes
+.plotIndividualDifferences <- function(independent, dependent, fit, title, subtitle, xmin, xmax){
+ 
+  samples <- posterior_samples(fit, pars = paste0(independent, "|ID"))
+  samples <- as_tibble(t(samples[, 7:9]))
+  
+  col <- which(colnames(dataset) == dependent)
+  dep <- aggregate(dataset[, col], by = list(ID = dataset$ID), FUN = mean, na.rm = T)
+  colnames(dep) <- c("ID", dependent)
+  dep <- dep[complete.cases(dep), ]
+  
+  plotdata <- cbind(dep, samples) %>%
+  gather(key = "key", value = "value", -as.character(dependent), -ID) %>%
+    group_by(ID) %>%
+    mutate(meanperid = mean(value))%>%
+    ungroup()
+  
+  plotdata$ID <- factor(plotdata$ID, levels = levels(plotdata$ID))
+  
+  p <- ggplot() +
+        ggridges::geom_density_ridges(data  = plotdata, 
+                                      aes(x = value, y = reorder(as.factor(ID), meanperid), 
+                                          height = ..density.., fill = ID, scale = 3, alpha = .6),
+                                          scale = 3, alpha = .6) +
+        geom_point(data = summarise(group_by(plotdata, ID), meand = mean(meanperid)),
+                    aes(x = meand, y = ID), col = "red") +
+        scale_x_continuous(name = "Value", limits = c(xmin, xmax), breaks = pretty(c(xmin, xmax))) + 
+        scale_y_discrete(name = "ID") +
+        viridis::scale_fill_viridis(discrete = TRUE) +
+        labs(title = title,
+             subtitle = subtitle) +
+        annotate(geom = "text", x = 1.5, y = 0.75, label = "Grand mean", col = "red", 
+                 family = theme_get()$text[["family"]], size = theme_get()$text[["size"]]/3, fontface = "italic") +
+        geom_vline(xintercept = 0, col = "red") +
+        theme_minimal() +
+        theme(panel.grid = element_blank(), axis.ticks = element_line(), axis.line.x = element_line())
   return(p)
 }
 
 # Apply the chosen seed globally
 set.seed(seed)
+
 ```
 
-# Inspecting the data
+# Data
 
 The data set contains the following variables:
 
-- `ID`: The identification number of the participant,
-- `INEG`: The intensity of daily negative events experienced by the participant,
-- `IPOS`: The intensity of daily positive events experienced by the participant,
-- `RUM`: The intensity of ruminating experienced by the participant,
-- `SAV`: The intensity of savoring experienced by the participant,
-- `SHAREN`: The intensity by which the participant shared negative events,
-- `SHAREP`: The intensity by which the participant shared positive events,
-- `PP`: The psychopathology score of the participant,
-- `GEN`: The gender of the participant,
-- `AGE`: The age of the participant.
+- $ID$: The identification number of the participant,
+- $INEG$: The intensity of daily negative events experienced by the participant,
+- $IPOS$: The intensity of daily positive events experienced by the participant,
+- $RUM$: The intensity of ruminating experienced by the participant,
+- $SAV$: The intensity of savoring experienced by the participant,
+- $SHAREN$: The intensity by which the participant shared negative events,
+- $SHAREP$: The intensity by which the participant shared positive events,
+- $PP$: The psychopathology score of the participant,
+- $GEN$: The gender of the participant,
+- $AGE$: The age of the participant.
 
-```{r data}
+```{r Reading data set}
 
 # Start by reading in the data set
 fulldata <- read.csv(file = "https://raw.githubusercontent.com/koenderks/preregistrationESM/master/CCP_pilot_resampled.csv", sep = ",")
@@ -180,38 +263,45 @@ fulldata <- .scaleNumericData(fulldata)
 
 # Inspect the data set
 head(fulldata)
+
 ```
 
 # Hypotheses
 
-The hypotheses for the experiment are the following:
+The expected relationships in the data are the following:
 
-- Hypothesis 1:  Sharing negative daily events is positively associated with psychopathology ($PP_{\uparrow} \rightarrow SHAREN_{\uparrow}$),
-- Hypothesis 2:  Ruminating about daily negative events is positively associated with psychopathology ($PP_{\uparrow} \rightarrow RUM_{\uparrow}$),
-- Hypothesis 3:  Sharing daily positive events is not associated with psychopathology ($PP_{\uparrow} \rightarrow SHAREP_{-}$),
-- Hypothesis 4:  Savouring daily positive events is not associated with psychopathology ($PP_{\uparrow} \rightarrow SAV_{-}$),
-- Hypothesis 5:  Intensity of daily negative events is positively associated with rumination ($INEG_{\uparrow} \rightarrow RUM_{\uparrow}$),
-- Hypothesis 6:  Intensity of daily negative events is positively associated with sharing ($INEG_{\uparrow} \rightarrow SHAREN_{\uparrow}$),
-- Hypothesis 7:  Intensity of daily positive events is positively associated with savouring ($IPOS_{\uparrow} \rightarrow SAV_{\uparrow}$),
-- Hypothesis 8:  Intensity of daily positive events is positively associated with sharing ($IPOS_{\uparrow} \rightarrow SHAREP_{\uparrow}$),
-- Hypothesis 9:  Psychopathology is positively associated with the intensity of daily negative events ($PP_{\uparrow} \rightarrow INEG_{\uparrow}$),
-- Hypothesis 10: Psychopathology is not associated with the intensity of daily positive events ($PP_{\uparrow} \rightarrow IPOS_{-}$).
-
+- Expectation 1:  Sharing negative daily events is positively associated with psychopathology ($PP_{\uparrow} \rightarrow SHAREN_{\uparrow}$),
+- Expectation 2:  Ruminating about daily negative events is positively associated with psychopathology ($PP_{\uparrow} \rightarrow RUM_{\uparrow}$),
+- Expectation 3:  Sharing daily positive events is not associated with psychopathology ($PP_{\uparrow} \rightarrow SHAREP_{-}$),
+- Expectation 4:  Savouring daily positive events is not associated with psychopathology ($PP_{\uparrow} \rightarrow SAV_{-}$),
+- Expectation 5:  Intensity of daily negative events is positively associated with rumination ($INEG_{\uparrow} \rightarrow RUM_{\uparrow}$),
+- Expectation 6:  Intensity of daily negative events is positively associated with sharing ($INEG_{\uparrow} \rightarrow SHAREN_{\uparrow}$),
+- Expectation 7:  Intensity of daily positive events is positively associated with savouring ($IPOS_{\uparrow} \rightarrow SAV_{\uparrow}$),
+- Expectation 8:  Intensity of daily positive events is positively associated with sharing ($IPOS_{\uparrow} \rightarrow SHAREP_{\uparrow}$),
+- Expectation 9:  Psychopathology is positively associated with the intensity of daily negative events ($PP_{\uparrow} \rightarrow INEG_{\uparrow}$),
+- Expectation 10: Psychopathology is not associated with the intensity of daily positive events ($PP_{\uparrow} \rightarrow IPOS_{-}$).
 
 # Analyses
 
-Below we will outline the six models we will use to find out to what degree the data contain support for any of the hypotheses.
+Below we will outline six models that will be use to find out to what degree the data contain support for any of the specified expectations.
 
 ## Model 1: Sharing negative events
 
-- Hypothesis 1: Talking more about daily negative events is associated with lower psychopathology
-- Hypothesis 6: Intensity of daily negative events is positively associated with sharing
+Model 1 investigates the following expectations:
+
+- Expectation 1: Talking more about daily negative events is associated with lower psychopathology,
+- Expectation 6: Intensity of daily negative events is positively associated with sharing.
 
 The regression formula for this model is:
 
-$$SHAREN_{ij} = \gamma_{00} + \gamma_{10} \cdot PP_{ij} + \gamma_{20} \cdot AGE_{ij} + \gamma_{30} \cdot GEN_{{M}_{ij}} + \gamma_{40} \times INEG_{ij} + u_{4j} \cdot INEG_{ij} + u_{0j} + \epsilon_{ij},$$
+$$SHAREN_{ij} = \gamma_{00} + \gamma_{10} \cdot PP_{ij} + \gamma_{20} \cdot AGE_{ij} + \gamma_{30} \cdot GEN_{{M}_{ij}} + \gamma_{40} \cdot INEG_{ij} + u_{4j} \cdot INEG_{ij} + u_{0j} + \epsilon_{ij},$$
 
 in which observation $i$ from participant $j$ is predicted by a population-level intercept and coefficients for $PP$, $AGE$, $GEN_M$ and $INEG$ and a person-level intercept and random coefficient for $INEG$.
+
+Therefore, to investigate expectation 1 and expectation 6, we test the following hypotheses respectively:
+
+- Hypothesis 1: $H_0: \gamma_{10} \geq 0$ vs. $H_1: \gamma_{10} < 0$,
+- Hypothesis 6: $H_0: \gamma_{40} \leq 0$ vs. $H_1: \gamma_{40} > 0$.
 
 ```{r class.source = "fold-show"}
 
@@ -228,18 +318,22 @@ in which observation $i$ from participant $j$ is predicted by a population-level
 
 model1f <- SHAREN ~ 1 + PP + AGE + INEG + (1 + INEG|ID)
 model1b <- SHAREN ~ 0 + Intercept + PP + AGE + GEN + INEG + (1 + INEG|ID)
+
 ```
 
-```{r}
+```{r Preparing data for model 1}
+
 # Remove NA values from the data set
 dataset <- fulldata[!is.na(fulldata$INEG), ]
+
 ```
 
 ### Data visualization
 
 First we visualize the data to get a better impression of the effects under investigation.
 
-```{r}
+```{r Visualizing data for model 1}
+
 p1 <- ggplot(data = dataset, aes(x = PP, y = SHAREN)) +
         geom_point(size = 1.2, alpha = 0.8, position = "jitter") +
         geom_smooth(method = lm, se = FALSE, size = .5, alpha = .8) +
@@ -264,31 +358,39 @@ p2 <- ggplot(data = dataset, aes(x = INEG, y = SHAREN, col = ID, group = ID)) +
         theme_minimal() +
         theme(panel.grid = element_blank(), axis.ticks = element_line())
 grid.arrange(p1, p2, nrow = 1)
+
 ```
 
 ### Frequentist analysis
 
-```{r}
+```{r Fitting model 1 using lme4}
+
 fit1_f  <- lme4::lmer(formula = model1f, data = dataset, control = ctrl)
 sum1_f  <- summary(fit1_f)
 print(sum1_f)
+
 ``` 
 
 ##### ANOVA test for fixed effects 
 
 By assessing the fixed effects in the model we are able to say something about the main effects.
 
-```{r}
+```{r Performing frequentist test for fixed effects in model 1}
+
 test1_f <- car::Anova(fit1_f)
 print(test1_f)
+
 ```
+
 ##### ANOVA test for removal of random effects
 
 By removing the random effect from the model, we can inspect whether it produced a better fit.
 
-```{r}
+```{r Performing frequentist test for removal of random effects in model 1}
+
 test1_f2 <- lmerTest::ranova(fit1_f)
 print(test1_f2)
+
 ```
 
 ### Bayesian analysis
@@ -306,13 +408,13 @@ $$\gamma_{00} \sim N(0, 10) \\
 The informed set of priors consists of: 
 
 $$\gamma_{00} \sim Cauchy(-0.48, 0.85) \\
-  \gamma_{10} \sim N(-.26,.25) \\
+  \gamma_{10} \sim N(-.26, .25) \\
   \gamma_{20} \sim N(-0.01, 0.05) \\ 
-  \gamma_{30} \sim N(0.45,.12) \\
+  \gamma_{30} \sim N(0.45, .12) \\
   \gamma_{40} \sim N(0, 10) \\
-  \sigma_{u_{4j}} \sim N(0.48,.06)$$
+  \sigma_{u_{4j}} \sim N(0.48, .06)$$
 
-```{r}
+```{r Fitting model 1 using brms}
 
 # Non-informative priors:
 #
@@ -378,246 +480,173 @@ fit1_bi <- brms::brm(formula  = model1b,
 
 ##### Non-informative priors
 
-```{r}
+```{r Printing summary of non-informed model 1}
+
 summary(fit1_bni)
+
 ```
 
-```{r}
+```{r Plotting chains of non-informed model 1}
+
 mcmc_plot(fit1_bni, type = "trace")
+
 ```
 
-```{r}
+```{r Plotting posterior histograms of non-informed model 1}
+
 mcmc_plot(fit1_bni, type = "hist")
+
 ```
 
-```{r}
-.plotFixedCoefficients(fit1_bni, title = "Posterior Density of Parameters With 95% CI lines", 
-                        xmin = -10, xmax = 10, warmup = warmup)
+```{r Plotting posterior densities of coefficients of non-informed model 1}
+
+.plotPopulationEffectDensities(fit1_bni, title = "Uninformed Posterior Density of Parameters With 95% CI lines", 
+                        xmin = -5, xmax = 5, warmup = warmup)
+
 ```
 
 ##### Informed priors
 
-```{r}
+```{r Printing summary of informed model 1}
+
 summary(fit1_bi, priors = TRUE)
+
 ```
 
-```{r}
+```{r Plotting chains of informed model 1}}
+
 mcmc_plot(fit1_bi, type = "trace")
+
 ```
 
-```{r}
+```{r Plotting posterior histograms of informed model 1}
+
 mcmc_plot(fit1_bi, type = "hist")
+
 ```
 
-```{r}
-.plotFixedCoefficients(fit1_bi, title = "Posterior Density of Parameters With 95% CI lines", 
-                        xmin = -2, xmax = 2, warmup = warmup)
-```
+```{r Plotting posterior densities of coefficients of informed model 1}
 
+.plotPopulationEffectDensities(fit1_bi, title = "Informed Posterior Density of Parameters With 95% CI lines", 
+                        xmin = -5, xmax = 5, warmup = warmup)
+
+```
 
 #### Hypothesis tests
 
 ##### Hypothesis 1: $\gamma_{10}$ < 0
 
-```{r}
+```{r Compiling test table for fixed effect PP in model 1}
+
 hypothesis1_bni <- brms::hypothesis(fit1_bni, "PP < 0", class = "b")
 hypothesis1_bi <- brms::hypothesis(fit1_bi, "PP < 0", class = "b")
 tab <- data.frame("Priors" = c("Non-informative", "Informed"))
 tab <- cbind(tab, rbind(hypothesis1_bni$hypothesis, hypothesis1_bi$hypothesis))
 print(tab)
+
 ```
 
+```{r Plotting prior sensitivity for fixed effect PP in model 1}
 
-```{r}
-p1 <- .plotPosteriorModelPP(fit1_bni, title = bquote("Posterior density for "*gamma[10]*" [Uninformed]"), 
-                            xmin = -30, xmax = 30, color = "yellow")
-p2 <- .plotPosteriorModelPP(fit1_bi, title = bquote("Posterior density for "*gamma[10]*" [Informed]"), 
-                            xmin = -2, xmax = 2, color = "dodgerblue")
-grid.arrange(p1, p2, nrow = 1)
+.plotInfluenceOfPriors(coef = "PP", fit1_f, fit1_bni, fit1_bi, 
+                    title = expression("Influence of (Informative) Priors on" ~ gamma[10]),
+                    priors = c("Non-informative ~ N(0, 10) prior", "Informative ~ N(-.26,.25) prior"),
+                    xmin = -5, xmax = 5, ymax = 3)
+
 ```
 
-```{r}
-posterior1 <- posterior_samples(fit1_bni, pars = "b_PP")
-posterior2 <- posterior_samples(fit1_bi, pars = "b_PP")
-
-posterior1.2 <- bind_rows("prior 1" = gather(posterior1),
-                            "prior 2" = gather(posterior2),
-                            .id = "id")
-
-p <- ggplot(data = posterior1.2,
-      mapping = aes(x = value, fill = id, colour = key, linetype = key, alpha = key)) +
-      geom_density(size = 0.8) +
-      geom_vline(xintercept = summary(fit1_f)$coefficients["PP", "Estimate"],
-                 size = .8, linetype = 2, col = "black") +
-      scale_x_continuous(name = "Value", limits = c(-5, 5))+
-      scale_y_continuous(name = "Density", limits = c(0, 3)) +
-      coord_cartesian(ylim = c(0, 5))+
-      scale_fill_manual(name   = "Densities",
-                        values = c("yellow", "dodgerblue"),
-                        labels = c("Non-informative ~ N(0, 10) prior",
-                                    "Informative ~ N(-.26,.25) prior")) +
-      scale_colour_manual(name   = 'Posterior/Prior',
-                          values = c("black","red"),
-                          labels = c("posterior", "prior"))+
-      scale_linetype_manual(name   ='Posterior/Prior',
-                        values = c("solid","dotted"),
-                        labels = c("posterior", "prior"))+
-      scale_alpha_discrete(name   = 'Posterior/Prior',
-                       range  = c(.7,.3),
-                       labels = c("posterior", "prior"))+
-      annotate(geom    = "text",
-                x = summary(fit1_f)$coefficients["PP", "Estimate"], y = 4,
-           label  = paste0("LME estimate:  ",
-                           round(summary(fit1_f)$coefficients["PP", "Estimate"], 3)),
-           col    = "black",
-           family = theme_get()$text[["family"]],
-           size   = theme_get()$text[["size"]]/3.5,
-           fontface="italic")+
-      labs(title    = expression("Influence of (Informative) Priors on" ~ gamma[10]),
-       subtitle = "2 different densities of priors and posteriors and the LME estimate") +
-      geom_segment(x = -5, xend = 5, y = -Inf, yend = -Inf) +
-      geom_segment(x = -Inf, xend = -Inf, y = 0, yend = 5) +
-      theme_minimal() +
-      theme(panel.grid = element_blank(), axis.ticks = element_line())
-print(p)
-```
 
 ##### Hypothesis 6: $\gamma_{40}$ > 0
 
-```{r}
-# hypothesis6_bni <- brms::hypothesis(fit1_bni, "INEG > 0", class = "sd", group = "ID")
-# hypothesis6_bi <- brms::hypothesis(fit1_bi, "INEG > 0", class = "sd", group = "ID")
+```{r Compiling test table for fixed effect INEG in model 1}
+
 hypothesis6_bni <- brms::hypothesis(fit1_bni, "INEG > 0", class = "b")
 hypothesis6_bi <- brms::hypothesis(fit1_bi, "INEG > 0", class = "b")
 tab <- data.frame("Priors" = c("Non-informative", "Informed"))
 tab <- cbind(tab, rbind(hypothesis6_bni$hypothesis, hypothesis6_bi$hypothesis))
 print(tab)
+
 ```
 
-```{r}
-p1 <- .plotPosteriorModelSD(fit1_bni, var = "INEG", title = bquote("Posterior density for "*sigma['u4j']*" [Uninformed]"), 
-                            xmin = -1, xmax = 3, color = "yellow")
-p2 <- .plotPosteriorModelSD(fit1_bi, var = "INEG", title = bquote("Posterior density for "*sigma['u4j']*" [Informed]"), 
-                            xmin = -1, xmax = 3, color = "dodgerblue")
+```{r Plotting prior sensitivity for fixed effect INEG in model 1}
+
+.plotInfluenceOfPriors(coef = "INEG", fit1_f, fit1_bni, fit1_bi, 
+                    title = expression("Influence of (Informative) Priors on" ~ gamma[40]),
+                    priors = c("Non-informative ~ N(0, 10) prior", "Non-informative ~ N(0, 10) prior"),
+                    xmin = -5, xmax = 5, ymax = 3)
+
+```
+
+```{r Plotting posterior distributions of individual differences in model 1, fig.height = 5, fig.width = 15}
+
+p1 <- .plotIndividualDifferences(independent = "INEG", dependent = "SHAREN", fit = fit1_bni, 
+                           title = expression(paste("ID Level Deviation of Regression Coefficient of INEG on SHARIN (", u["4j"],")")),
+                           subtitle = expression(paste("Uninformed Posterior distribution of deviation of regression coefficient (", u["4j"],") per ID")),
+                           xmin = -5, xmax = 5)
+
+p2 <- .plotIndividualDifferences(independent = "INEG", dependent = "SHAREN", fit = fit1_bi, 
+                           title = expression(paste("ID Level Deviation of Regression Coefficient of INEG on SHARIN (", u["4j"],")")),
+                           subtitle = expression(paste("Informed Posterior distribution of deviation of regression coefficient (", u["4j"],") per ID")),
+                           xmin = -5, xmax = 5)
+
 grid.arrange(p1, p2, nrow = 1)
-```
 
-```{r}
-
-samples <- posterior_samples(fit1_bi, pars = "INEG|ID")
-samples <- as_tibble(t(samples[, 7:9]))
-
-SHAREN <- dataset %>% group_by(ID) %>% summarise("SHAREN" = mean(SHAREN, na.rm = T))
-SHAREN <- SHAREN[complete.cases(SHAREN), ]
-
-plotdata <- cbind(SHAREN, samples) %>%
-gather(key = "key", value = "value", -SHAREN, -ID) %>%
-  group_by(ID) %>%
-  mutate(meanperid = mean(value))%>%
-  ungroup()
-
-p <- ggplot() +
-      geom_vline(xintercept = 0, col = "red") +
-      ggridges::geom_density_ridges(data  = plotdata, 
-                                    aes(x = value, y = reorder(as.factor(ID), meanperid), height = ..density.., 
-                                        fill = ID, scale = 3, alpha = .6),
-                                    scale = 3, 
-                                    alpha = .6) +
-      geom_point(data = summarise(group_by(plotdata, ID), meand = mean(meanperid)),
-                  aes(x = meand, y = ID), col = "red") +
-      scale_x_continuous(name = "Value", limits = c(-5, 10)) + 
-      scale_y_discrete(name = "ID") +
-      viridis::scale_fill_viridis(discrete = TRUE) +
-      labs(title = expression(paste("ID Level Deviation of Regression Coefficient of INEG on SHARIN (", u["4j"],")")),
-           subtitle = expression(paste("Posterior distribution of deviation of regression coefficient (", u["4j"],") per ID with the means in red"))) +
-      annotate(geom = "text", x = 1.5, y = 0.5, label = "Grand mean", col = "red", family = theme_get()$text[["family"]], 
-           size = theme_get()$text[["size"]]/3, fontface = "italic") +
-      theme_minimal() +
-      theme(panel.grid = element_blank(), axis.ticks = element_line())
-print(p)
 ```
 
 ## Model 2: Sharing positive events
 
-```{r specify model 2}
+```{r class.source = "fold-show"}
+
 # Hypothesis 3: Talking more about daily positive events is not associated with psychopathology -> No population effect (PP = 0).
 # Hypothesis 8: Intensity of daily positive events is positively associated with sharing -> Positive group effect (IPOS/ID > 0).
 
-model2 <- SHAREN ~ 1 + PP + AGE + GEN + (1 + IPOS|ID)
-```
+model2f <- SHAREN ~ 1 + PP + AGE + GEN + IPOS + (1 + IPOS|ID)
+model2b <- SHAREN ~ 0 + Intercept + PP + AGE + GEN + IPOS + (1 + IPOS|ID)
 
-### Frequentist analysis
-
-```{r fit model 2}
-# fit2_f <- lme4::lmer(formula = model2, data = dataset, control = ctrl)
-# sum2_f <- summary(fit2_f)
-# test2_f <- lmerTest::ranova(fit2_f)
 ```
 
 ## Model 3: Ruminating negative events
 
-```{r specify model 3}
+```{r class.source = "fold-show"}
+
 # Hypothesis 2: Ruminating more about daily negative events is associated with higher psychopathology -> Positive population effect (PP > 0).
 # Hypothesis 5: Intensity of daily negative events is positively associated with rumination. -> Positive group effect (INEG/DAY > 0).
 
-model3 <- RUM ~ 1 + PP + AGE + GEN + (1 + INEG|ID)
-```
+model3f <- RUM ~ 1 + PP + AGE + GEN + INEG + (1 + INEG|ID)
+model3b <- RUM ~ 0 + Intercept + PP + AGE + GEN + INEG + (1 + INEG|ID)
 
-### Frequentist analysis
-
-```{r fit model 3}
-# fit3_f <- lme4::lmer(formula = model3, data = dataset, control = ctrl)
-# sum3_f <- summary(fit3_f)
-# test3_f <- lmerTest::ranova(fit3_f)
 ```
 
 ## Model 4: Savouring positive events
 
-```{r specify model 4}
+```{r class.source = "fold-show"}
 # Hypothesis 4: Savouring daily positive events is not associated with psychopathology. -> No population effect (PP = 0)
 # Hypothesis 7: Intensity of daily positive events is positively associated with savouring. -> Positive group effect (IPOS/DAY > 0)
 
-model4 <- SAV ~ 1 + PP + AGE + GEN + (1 + IPOS|ID)
-```
-
-### Frequentist analysis
-
-```{r fit model 4}
-# fit4_f <- lme4::lmer(formula = model4, data = dataset, control = ctrl)
-# sum4_f <- summary(fit4_f)
-# test4_f <- lmerTest::ranova(fit4_f)
+model4f <- SAV ~ 1 + PP + AGE + GEN + IPOS + (1 + IPOS|ID)
+model4b <- SAV ~ 0 + Intercept + PP + AGE + GEN + IPOS + (1 + IPOS|ID)
 ```
 
 ## Model 5: Intensity negative events
 
-```{r specify model 5}
+```{r class.source = "fold-show"}
+
 # Hypothesis 9: Psychopathology is positively associated with the intensity of daily negative events. -> Positive population effect (PP > 0).
 
-model5 <- INEG ~ 1 + PP + AGE + GEN
-```
+model5f <- INEG ~ 1 + PP + AGE + GEN
+model5b <- INEG ~ 0 + Intercept + PP + AGE + GEN
 
-### Frequentist analysis
-
-```{r fit model 5}
-# fit5_f <- lme4::lmer(formula = model5, data = dataset, control = ctrl)
-# sum5_f <- summary(fit5_f)
-# test5_f <- lmerTest::ranova(fit5_f)
 ```
 
 ## Model 6: Intensity positive events
 
-```{r specify model 6}
+```{r class.source = "fold-show"}
+
 # Hypothesis 10: Psychopathology is not associated with the intensity of daily positive events. -> No population effect (PP = 0).
 
-model6 <- IPOS ~ 1 + PP + AGE + GEN
-```
+model6f <- IPOS ~ 1 + PP + AGE + GEN
+model6b <- IPOS ~ 0 + Intercept + PP + AGE + GEN
 
-### Frequentist analysis
-
-```{r fit model 6}
-# fit6_f <- lme4::lmer(formula = model6, data = dataset, control = ctrl)
-# sum6_f <- summary(fit6_f)
-# test6_f <- lmerTest::ranova(fit6_f)
 ```
 
 # Results
