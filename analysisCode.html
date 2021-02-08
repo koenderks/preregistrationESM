@@ -1800,6 +1800,7 @@ adapt_delta     &lt;- 0.999         # Target acceptance rate of samples
   return(x)
 }
 
+# Create a function to visualize the posterior distributions of the fixed effects
 .plotPopulationEffectDensities &lt;- function(fit, title, xmin, xmax, warmup){
   colorValues &lt;- c(&quot;darkorange1&quot;, &quot;gold&quot;, &quot;khaki4&quot;, &quot;turquoise4&quot;, &quot;mediumpurple3&quot;)
   mtfit &lt;- ggs(fit)
@@ -1848,6 +1849,7 @@ adapt_delta     &lt;- 0.999         # Target acceptance rate of samples
   return(p)
 }
 
+# Create a function to visualize the non-informed and informed prior and posterior distributions
 .plotInfluenceOfPriors &lt;- function(coef, fit_f, fit_ni, fit_i, title, priors, xmin, xmax, ymax){
   
   lmeEst &lt;- summary(fit1_f)$coefficients[coef, &quot;Estimate&quot;]
@@ -1895,6 +1897,7 @@ adapt_delta     &lt;- 0.999         # Target acceptance rate of samples
   return(p) 
 }
 
+# Create a function to visualize the posterior distribution of the random slopes standard deviation
 .plotPosteriorModelSD &lt;- function(fit, var, title, xmin, xmax, color){
   parName &lt;- paste0(&quot;sd_ID__&quot;, var)
   sumRandom &lt;- summary(fit)$random$ID
@@ -1917,6 +1920,7 @@ adapt_delta     &lt;- 0.999         # Target acceptance rate of samples
   return(p)
 }
 
+# Create a function to visualize the individual posterior distributions of the random slopes
 .plotIndividualDifferences &lt;- function(independent, dependent, fit, title, subtitle, xmin, xmax){
  
   samples &lt;- posterior_samples(fit, pars = paste0(independent, &quot;|ID&quot;))
@@ -1996,7 +2000,7 @@ head(fulldata)</code></pre>
 </div>
 <div id="hypotheses" class="section level1">
 <h1 number="2"><span class="header-section-number">2</span> Hypotheses</h1>
-<p>The expected relationships for the experiment are the following:</p>
+<p>The expected relationships in the data are the following:</p>
 <ul>
 <li>Expectation 1: Sharing negative daily events is positively associated with psychopathology (<span class="math inline">\(PP_{\uparrow} \rightarrow SHAREN_{\uparrow}\)</span>),</li>
 <li>Expectation 2: Ruminating about daily negative events is positively associated with psychopathology (<span class="math inline">\(PP_{\uparrow} \rightarrow RUM_{\uparrow}\)</span>),</li>
@@ -2012,16 +2016,16 @@ head(fulldata)</code></pre>
 </div>
 <div id="analyses" class="section level1">
 <h1 number="3"><span class="header-section-number">3</span> Analyses</h1>
-<p>Below we will outline the six models we will use to find out to what degree the data contain support for any of the expectations formulated above.</p>
+<p>Below we will outline six models that will be use to find out to what degree the data contain support for any of the specified expectations.</p>
 <div id="model-1-sharing-negative-events" class="section level2">
 <h2 number="3.1"><span class="header-section-number">3.1</span> Model 1: Sharing negative events</h2>
-<p>This model investigates the followign expectations:</p>
+<p>Model 1 investigates the following expectations:</p>
 <ul>
 <li>Expectation 1: Talking more about daily negative events is associated with lower psychopathology,</li>
 <li>Expectation 6: Intensity of daily negative events is positively associated with sharing.</li>
 </ul>
 <p>The regression formula for this model is:</p>
-<p><span class="math display">\[SHAREN_{ij} = \gamma_{00} + \gamma_{10} \cdot PP_{ij} + \gamma_{20} \cdot AGE_{ij} + \gamma_{30} \cdot GEN_{{M}_{ij}} + \gamma_{40} \times INEG_{ij} + u_{4j} \cdot INEG_{ij} + u_{0j} + \epsilon_{ij},\]</span></p>
+<p><span class="math display">\[SHAREN_{ij} = \gamma_{00} + \gamma_{10} \cdot PP_{ij} + \gamma_{20} \cdot AGE_{ij} + \gamma_{30} \cdot GEN_{{M}_{ij}} + \gamma_{40} \cdot INEG_{ij} + u_{4j} \cdot INEG_{ij} + u_{0j} + \epsilon_{ij},\]</span></p>
 <p>in which observation <span class="math inline">\(i\)</span> from participant <span class="math inline">\(j\)</span> is predicted by a population-level intercept and coefficients for <span class="math inline">\(PP\)</span>, <span class="math inline">\(AGE\)</span>, <span class="math inline">\(GEN_M\)</span> and <span class="math inline">\(INEG\)</span> and a person-level intercept and random coefficient for <span class="math inline">\(INEG\)</span>.</p>
 <p>Therefore, to investigate expectation 1 and expectation 6, we test the following hypotheses respectively:</p>
 <ul>
@@ -2145,11 +2149,11 @@ print(test1_f2)</code></pre>
   \gamma_{40} \sim N(0, 10)\]</span></p>
 <p>The informed set of priors consists of:</p>
 <p><span class="math display">\[\gamma_{00} \sim Cauchy(-0.48, 0.85) \\
-  \gamma_{10} \sim N(-.26,.25) \\
+  \gamma_{10} \sim N(-.26, .25) \\
   \gamma_{20} \sim N(-0.01, 0.05) \\ 
-  \gamma_{30} \sim N(0.45,.12) \\
+  \gamma_{30} \sim N(0.45, .12) \\
   \gamma_{40} \sim N(0, 10) \\
-  \sigma_{u_{4j}} \sim N(0.48,.06)\]</span></p>
+  \sigma_{u_{4j}} \sim N(0.48, .06)\]</span></p>
 <pre class="r"><code># Non-informative priors:
 #
 # b_Intercept ~ Normal(0,10)
