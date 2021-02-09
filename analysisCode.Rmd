@@ -397,38 +397,38 @@ print(test1_f2)
 
 For the Bayesian analysis we use two different sets of priors.
 
-The non-informative set of priors consists of:
+First, we specify a set of non-informative priors on top of the `brms` default priors consisting of:
 
-$$\gamma_{00} \sim N(0, 10) \\
-  \gamma_{10} \sim N(0, 10) \\
-  \gamma_{20} \sim N(0, 10) \\ 
-  \gamma_{30} \sim N(0, 10) \\
-  \gamma_{40} \sim N(0, 10)$$
+$$\gamma_{00} \sim N(0, 1) \\
+  \gamma_{10} \sim N(0, 1) \\
+  \gamma_{20} \sim N(0, 1) \\ 
+  \gamma_{30} \sim N(0, 1) \\
+  \gamma_{40} \sim N(0, 1)$$
 
-The informed set of priors consists of: 
+Second, we specify a set of informed priors on top of the `brms` default priors consisting of: 
 
 $$\gamma_{00} \sim Cauchy(-0.48, 0.85) \\
   \gamma_{10} \sim N(-.26, .25) \\
   \gamma_{20} \sim N(-0.01, 0.05) \\ 
   \gamma_{30} \sim N(0.45, .12) \\
-  \gamma_{40} \sim N(0, 10) \\
+  \gamma_{40} \sim N(0, 1) \\
   \sigma_{u_{4j}} \sim N(0.48, .06)$$
 
 ```{r Fitting model 1 using brms}
 
 # Non-informative priors:
 #
-# b_Intercept ~ Normal(0,10)
-# b_Age ~ Normal(0,10)
-# b_PP ~ Normal(0,10)
-# b_GEN2 ~ Normal(0,10)
-# b_INEG ~ Normal(0, 10)
+# b_Intercept ~ Normal(0, 1)
+# b_Age ~ Normal(0, 1)
+# b_PP ~ Normal(0, 1)
+# b_GEN2 ~ Normal(0, 1)
+# b_INEG ~ Normal(0, 1)
 
-priorsni <- c(set_prior("normal(0,10)", class = "b", coef = "Intercept"),
-            set_prior("normal(0,10)", class = "b", coef = "AGE"),
-            set_prior("normal(0,10)", class = "b", coef = "PP"),
-            set_prior("normal(0,10)", class = "b", coef = "GEN2"),
-            set_prior("normal(0, 10)", class = "b", coef = "INEG"))
+priorsni <- c(set_prior("normal(0,1)", class = "b", coef = "Intercept"),
+            set_prior("normal(0,1)", class = "b", coef = "AGE"),
+            set_prior("normal(0,1)", class = "b", coef = "PP"),
+            set_prior("normal(0,1)", class = "b", coef = "GEN2"),
+            set_prior("normal(0,1)", class = "b", coef = "INEG"))
 
 fit1_bni <- brms::brm(formula = model1b, 
                     data      = dataset, 
@@ -450,14 +450,14 @@ fit1_bni <- brms::brm(formula = model1b,
 # b_Age ~ Normal(-0.01, 0.05)
 # b_PP ~ Normal(-.26,.25)
 # b_GEN2 ~ Normal(0.45,.12)
-# b_INEG ~ Normal(0, 10)
+# b_INEG ~ Normal(0, 1)
 # sd_INEG_ID ~ Normal(0.48,.06)
 
 priorsi <- c(set_prior("cauchy(-.48,.85)", class = "b", coef = "Intercept"),
             set_prior("normal(-.01, .05)", class = "b", coef = "AGE"),
             set_prior("normal(-.26,.25)", class = "b", coef = "PP"),
             set_prior("normal(0.45,.12)", class = "b", coef = "GEN2"),
-            set_prior("normal(0, 10)", class = "b", coef = "INEG"),
+            set_prior("normal(0, 1)", class = "b", coef = "INEG"),
             set_prior("normal(0.48,.06)", class = "sd", coef = "INEG", group = "ID"))
 
 fit1_bi <- brms::brm(formula  = model1b, 
@@ -550,7 +550,7 @@ print(tab)
 
 .plotInfluenceOfPriors(coef = "PP", fit1_f, fit1_bni, fit1_bi, 
                     title = expression("Influence of (Informative) Priors on" ~ gamma[10]),
-                    priors = c("Non-informative ~ N(0, 10) prior", "Informative ~ N(-.26,.25) prior"),
+                    priors = c("Non-informative ~ N(0, 1) prior", "Informative ~ N(-.26,.25) prior"),
                     xmin = -5, xmax = 5, ymax = 3)
 
 ```
@@ -572,7 +572,7 @@ print(tab)
 
 .plotInfluenceOfPriors(coef = "INEG", fit1_f, fit1_bni, fit1_bi, 
                     title = expression("Influence of (Informative) Priors on" ~ gamma[40]),
-                    priors = c("Non-informative ~ N(0, 10) prior", "Non-informative ~ N(0, 10) prior"),
+                    priors = c("Non-informative ~ N(0, 1) prior", "Non-informative ~ N(0, 1) prior"),
                     xmin = -5, xmax = 5, ymax = 3)
 
 ```
