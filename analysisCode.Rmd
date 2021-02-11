@@ -248,7 +248,7 @@ The data set contains the following variables:
 ```{r Reading data set}
 
 # Start by reading in the data set
-fulldata <- read.csv(file = "https://raw.githubusercontent.com/koenderks/preregistrationESM/master/CCP_pilot_resampled.csv", sep = ",")
+fulldata <- read.csv(file = "dataset.csv", sep = ",", fileEncoding="UTF-8-BOM")
 
 # Select only the columns that are required for these analyses
 fulldata <- fulldata[, c("ID", "INEG", "IPOS", "RUM", "SAV", "SHAREN", "SHAREP", "PP", "GEN", "AGE", "DAY")]
@@ -501,7 +501,7 @@ mcmc_plot(fit1_bni, type = "hist")
 ```{r Plotting posterior densities of coefficients of non-informed model 1}
 
 .plotPopulationEffectDensities(fit1_bni, title = "Uninformed Posterior Density of Parameters With 95% CI lines", 
-                        xmin = -5, xmax = 5, warmup = warmup)
+                        xmin = -2, xmax = 2, warmup = warmup)
 
 ```
 
@@ -528,7 +528,7 @@ mcmc_plot(fit1_bi, type = "hist")
 ```{r Plotting posterior densities of coefficients of informed model 1}
 
 .plotPopulationEffectDensities(fit1_bi, title = "Informed Posterior Density of Parameters With 95% CI lines", 
-                        xmin = -5, xmax = 5, warmup = warmup)
+                        xmin = -2, xmax = 2, warmup = warmup)
 
 ```
 
@@ -551,10 +551,9 @@ print(tab)
 .plotInfluenceOfPriors(coef = "PP", fit1_f, fit1_bni, fit1_bi, 
                     title = expression("Influence of (Informative) Priors on" ~ gamma[10]),
                     priors = c("Non-informative ~ N(0, 1) prior", "Informative ~ N(-.26,.25) prior"),
-                    xmin = -5, xmax = 5, ymax = 3)
+                    xmin = -2.5, xmax = 2.5, ymax = 6)
 
 ```
-
 
 ##### Hypothesis 6: $\gamma_{40}$ > 0
 
@@ -573,21 +572,21 @@ print(tab)
 .plotInfluenceOfPriors(coef = "INEG", fit1_f, fit1_bni, fit1_bi, 
                     title = expression("Influence of (Informative) Priors on" ~ gamma[40]),
                     priors = c("Non-informative ~ N(0, 1) prior", "Non-informative ~ N(0, 1) prior"),
-                    xmin = -5, xmax = 5, ymax = 3)
+                    xmin = -2.5, xmax = 2.5, ymax = 7)
 
 ```
 
-```{r Plotting posterior distributions of individual differences in model 1, fig.height = 5, fig.width = 15}
+```{r Plotting posterior distributions of individual differences in model 1, fig.height = 10, fig.width = 15}
 
 p1 <- .plotIndividualDifferences(independent = "INEG", dependent = "SHAREN", fit = fit1_bni, 
                            title = expression(paste("ID Level Deviation of Regression Coefficient of INEG on SHARIN (", u["4j"],")")),
                            subtitle = expression(paste("Uninformed Posterior distribution of deviation of regression coefficient (", u["4j"],") per ID")),
-                           xmin = -5, xmax = 5)
+                           xmin = -1, xmax = 1)
 
 p2 <- .plotIndividualDifferences(independent = "INEG", dependent = "SHAREN", fit = fit1_bi, 
                            title = expression(paste("ID Level Deviation of Regression Coefficient of INEG on SHARIN (", u["4j"],")")),
                            subtitle = expression(paste("Informed Posterior distribution of deviation of regression coefficient (", u["4j"],") per ID")),
-                           xmin = -5, xmax = 5)
+                           xmin = -1, xmax = 1)
 
 grid.arrange(p1, p2, nrow = 1)
 
