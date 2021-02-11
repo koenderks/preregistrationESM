@@ -248,7 +248,7 @@ The data set contains the following variables:
 ```{r Reading data set}
 
 # Start by reading in the data set
-fulldata <- read.csv(file = "dataset.csv", sep = ",", fileEncoding="UTF-8-BOM")
+fulldata <- read.csv(file = "https://raw.githubusercontent.com/koenderks/preregistrationESM/master/dataset.csv", sep = ",", fileEncoding="UTF-8-BOM")
 
 # Select only the columns that are required for these analyses
 fulldata <- fulldata[, c("ID", "INEG", "IPOS", "RUM", "SAV", "SHAREN", "SHAREP", "PP", "GEN", "AGE", "DAY")]
