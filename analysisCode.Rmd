@@ -48,8 +48,8 @@ ctrl <- lme4::lmerControl(optimizer = "optimx", calc.derivs = FALSE,
                           optCtrl = list(method = "nlminb", starttests = FALSE, kkt = FALSE))
 
 # Specify the algorithmic options for `brms`
-warmup          <- 200           # Number of samples to discard before saving
-iterations      <- 1000          # Number of total samples
+warmup          <- 1000          # Number of samples to discard before saving
+iterations      <- 3000          # Number of total samples
 chains          <- 4             # Number of individual sampling chains
 cores           <- 4             # Number of CPU cores to use
 max_treedepth   <- 10            # Maximum allowed tree depth
@@ -79,7 +79,7 @@ adapt_delta     <- 0.999         # Target acceptance rate of samples
               geom_density(alpha = .5) +
               labs(title = title) +
               geom_segment(x = 0, xend = 0, y = 0, yend = Inf, colour = "red", linetype = "solid", size = 0.5) + 
-              scale_x_continuous(name   = "Value", limits = c(xmin, xmax)) + 
+              scale_x_continuous(name   = "Standardized value", limits = c(xmin, xmax)) + 
               scale_y_continuous(name = "Density") +
               geom_segment(x = sumFixed[1,3], xend = sumFixed[1,3], y = 0, yend = Inf, 
                            col = colorValues[1], linetype = 2) +
@@ -140,7 +140,7 @@ adapt_delta     <- 0.999         # Target acceptance rate of samples
                  col = "black", family = theme_get()$text[["family"]], size = theme_get()$text[["size"]]/3.5,
                  fontface="italic") +
         geom_density(size = 0.75) +
-        scale_x_continuous(name = "Value", limits = c(xmin, xmax)) +
+        scale_x_continuous(name = "Standardized value", limits = c(xmin, xmax)) +
         scale_y_continuous(name = "Density", limits = c(0, ymax), breaks = pretty(c(0, ymax))) +
         scale_fill_manual(name = "Densities", values = colorValues, labels = priors) +
         scale_colour_manual(name = 'Posterior/Prior', values = c("black","red"), labels = c("posterior", "prior"))+
@@ -176,7 +176,7 @@ adapt_delta     <- 0.999         # Target acceptance rate of samples
       geom_segment(x = sumRandom[2,4], xend = sumRandom[2,4], 
                          y = Inf, yend = 0, col = "blue", linetype = 2) +
       geom_density(fill  = color, alpha = .05) +
-      scale_x_continuous(name = "Value", limits = c(xmin, xmax), breaks = pretty(c(xmin, xmax, 0))) + 
+      scale_x_continuous(name = "Standardized value", limits = c(xmin, xmax), breaks = pretty(c(xmin, xmax, 0))) + 
       scale_y_continuous(name = "Density") +
       labs(title = title) +
       geom_segment(x = xmin, xend = xmax, y = -Inf, yend = -Inf) +
@@ -316,7 +316,7 @@ Therefore, to investigate expectation 1 and expectation 6, we test the following
 # Model:
 # SHAREN ~ 1 + PP + AGE + GEN + INEG + (1 + INEG|ID)
 
-model1f <- SHAREN ~ 1 + PP + AGE + INEG + (1 + INEG|ID)
+model1f <- SHAREN ~ 1 + PP + AGE + GEN + INEG + (1 + INEG|ID)
 model1b <- SHAREN ~ 0 + Intercept + PP + AGE + GEN + INEG + (1 + INEG|ID)
 
 ```
@@ -501,7 +501,7 @@ mcmc_plot(fit1_bni, type = "hist")
 ```{r Plotting posterior densities of coefficients of non-informed model 1}
 
 .plotPopulationEffectDensities(fit1_bni, title = "Uninformed Posterior Density of Parameters With 95% CI lines", 
-                        xmin = -2, xmax = 2, warmup = warmup)
+                        xmin = -1, xmax = 1, warmup = warmup)
 
 ```
 
@@ -528,7 +528,7 @@ mcmc_plot(fit1_bi, type = "hist")
 ```{r Plotting posterior densities of coefficients of informed model 1}
 
 .plotPopulationEffectDensities(fit1_bi, title = "Informed Posterior Density of Parameters With 95% CI lines", 
-                        xmin = -2, xmax = 2, warmup = warmup)
+                        xmin = -1, xmax = 1, warmup = warmup)
 
 ```
 
