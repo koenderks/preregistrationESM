@@ -38,7 +38,6 @@ library(ggthemes)
 library(ggridges)
 library(gridExtra)
 library(mcmcplots)
-library(car)
 
 # Set a global seed to make the results reproducible
 seed <- 120495
@@ -48,8 +47,8 @@ ctrl <- lme4::lmerControl(optimizer = "optimx", calc.derivs = FALSE,
                           optCtrl = list(method = "nlminb", starttests = FALSE, kkt = FALSE))
 
 # Specify the algorithmic options for `brms`
-warmup          <- 1000          # Number of samples to discard before saving
-iterations      <- 3000          # Number of total samples
+warmup          <- 2000          # Number of samples to discard before saving
+iterations      <- 5000          # Number of total samples
 chains          <- 4             # Number of individual sampling chains
 cores           <- 4             # Number of CPU cores to use
 max_treedepth   <- 10            # Maximum allowed tree depth
@@ -251,7 +250,7 @@ The data set contains the following variables:
 fulldata <- read.csv(file = "https://raw.githubusercontent.com/koenderks/preregistrationESM/master/dataset.csv", sep = ",", fileEncoding="UTF-8-BOM")
 
 # Select only the columns that are required for these analyses
-fulldata <- fulldata[, c("ID", "INEG", "IPOS", "RUM", "SAV", "SHAREN", "SHAREP", "PP", "GEN", "AGE", "DAY")]
+fulldata <- fulldata[, c("ID", "INEG", "IPOS", "RUM", "SAV", "SHAREN", "SHAREP", "PP", "GEN", "AGE", "DAY", "C19SE", "C19SS")]
 
 # Make factor variables for ID, DAY, and GEN
 fulldata$ID   <- as.factor(fulldata$ID)
@@ -281,7 +280,7 @@ The expected relationships in the data are the following:
 - Expectation 9:  Psychopathology is positively associated with the intensity of daily negative events ($PP_{\uparrow} \rightarrow INEG_{\uparrow}$),
 - Expectation 10: Psychopathology is not associated with the intensity of daily positive events ($PP_{\uparrow} \rightarrow IPOS_{-}$).
 
-# Analyses
+# Confirmatory Analyses
 
 Below we will outline six models that will be use to find out to what degree the data contain support for any of the specified expectations.
 
@@ -365,23 +364,11 @@ grid.arrange(p1, p2, nrow = 1)
 
 ```{r Fitting model 1 using lme4}
 
-fit1_f  <- lme4::lmer(formula = model1f, data = dataset, control = ctrl)
+fit1_f  <- lmerTest::lmer(formula = model1f, data = dataset, control = ctrl)
 sum1_f  <- summary(fit1_f)
 print(sum1_f)
 
 ``` 
-
-##### ANOVA test for fixed effects 
-
-By assessing the fixed effects in the model we are able to say something about the main effects.
-
-```{r Performing frequentist test for fixed effects in model 1}
-
-test1_f <- car::Anova(fit1_f)
-print(test1_f)
-
-```
-
 ##### ANOVA test for removal of random effects
 
 By removing the random effect from the model, we can inspect whether it produced a better fit.
@@ -411,8 +398,7 @@ $$\gamma_{00} \sim Cauchy(-0.48, 0.85) \\
   \gamma_{10} \sim N(-.26, .25) \\
   \gamma_{20} \sim N(-0.01, 0.05) \\ 
   \gamma_{30} \sim N(0.45, .12) \\
-  \gamma_{40} \sim N(0, 1) \\
-  \sigma_{u_{4j}} \sim N(0.48, .06)$$
+  \gamma_{40} \sim N(0.48, 0.06)$$
 
 ```{r Fitting model 1 using brms}
 
@@ -450,15 +436,13 @@ fit1_bni <- brms::brm(formula = model1b,
 # b_Age ~ Normal(-0.01, 0.05)
 # b_PP ~ Normal(-.26,.25)
 # b_GEN2 ~ Normal(0.45,.12)
-# b_INEG ~ Normal(0, 1)
-# sd_INEG_ID ~ Normal(0.48,.06)
+# b_INEG ~ Normal(0.48,.06)
 
 priorsi <- c(set_prior("cauchy(-.48,.85)", class = "b", coef = "Intercept"),
             set_prior("normal(-.01, .05)", class = "b", coef = "AGE"),
             set_prior("normal(-.26,.25)", class = "b", coef = "PP"),
             set_prior("normal(0.45,.12)", class = "b", coef = "GEN2"),
-            set_prior("normal(0, 1)", class = "b", coef = "INEG"),
-            set_prior("normal(0.48,.06)", class = "sd", coef = "INEG", group = "ID"))
+            set_prior("normal(0.48,.06)", class = "b", coef = "INEG"))
 
 fit1_bi <- brms::brm(formula  = model1b, 
                      data     = dataset, 
@@ -482,7 +466,8 @@ fit1_bi <- brms::brm(formula  = model1b,
 
 ```{r Printing summary of non-informed model 1}
 
-summary(fit1_bni)
+sum1_bni <- summary(fit1_bni)
+print(sum1_bni)
 
 ```
 
@@ -501,7 +486,7 @@ mcmc_plot(fit1_bni, type = "hist")
 ```{r Plotting posterior densities of coefficients of non-informed model 1}
 
 .plotPopulationEffectDensities(fit1_bni, title = "Uninformed Posterior Density of Parameters With 95% CI lines", 
-                        xmin = -1, xmax = 1, warmup = warmup)
+                                xmin = -1, xmax = 1, warmup = warmup)
 
 ```
 
@@ -509,7 +494,8 @@ mcmc_plot(fit1_bni, type = "hist")
 
 ```{r Printing summary of informed model 1}
 
-summary(fit1_bi, priors = TRUE)
+sum1_bi <- summary(fit1_bi, priors = TRUE)
+print(sum1_bi)
 
 ```
 
@@ -528,7 +514,7 @@ mcmc_plot(fit1_bi, type = "hist")
 ```{r Plotting posterior densities of coefficients of informed model 1}
 
 .plotPopulationEffectDensities(fit1_bi, title = "Informed Posterior Density of Parameters With 95% CI lines", 
-                        xmin = -1, xmax = 1, warmup = warmup)
+                                xmin = -1, xmax = 1, warmup = warmup)
 
 ```
 
@@ -571,7 +557,7 @@ print(tab)
 
 .plotInfluenceOfPriors(coef = "INEG", fit1_f, fit1_bni, fit1_bi, 
                     title = expression("Influence of (Informative) Priors on" ~ gamma[40]),
-                    priors = c("Non-informative ~ N(0, 1) prior", "Non-informative ~ N(0, 1) prior"),
+                    priors = c("Non-informative ~ N(0, 1) prior", "Non-informative ~ N(0.48, 0.06) prior"),
                     xmin = -2.5, xmax = 2.5, ymax = 7)
 
 ```
@@ -648,4 +634,42 @@ model6b <- IPOS ~ 0 + Intercept + PP + AGE + GEN
 
 ```
 
-# Results
+# Confirmatory Results
+
+```{r Creating results table}
+
+types <- c("Frequentist", "Non-informed Bayesian", "Informed Bayesian")
+
+# Model 1 hypothesis 1
+model1_model <- c(1, NA, NA)
+model1_hyp1_h0 <- c("PP >= 0", NA, NA)
+model1_hyp1_h1 <- c("PP < 0", NA, NA)
+model1_hyp1_estimates <- c(sum1_f$coefficients["PP", "Estimate"], sum1_bni$fixed["PP", "Estimate"], sum1_bi$fixed["PP", "Estimate"])
+model1_hyp1_errors <- c(sum1_f$coefficients["PP", "Std. Error"], sum1_bni$fixed["PP", "Est.Error"], sum1_bi$fixed["PP", "Est.Error"])
+model1_hyp1_p <- c(sum1_f$coefficients["PP", 5], NA, NA)
+model1_hyp1_pp <- c(NA, hypothesis1_bni$hypothesis$Post.Prob, hypothesis1_bi$hypothesis$Post.Prob)
+
+# Model 1 hypothesis 6
+model1_hyp6_h0 <- c("INEG <= 0", NA, NA)
+model1_hyp6_h1 <- c("INEG > 0", NA, NA)
+model1_hyp6_estimates <- c(sum1_f$coefficients["INEG", "Estimate"], sum1_bni$fixed["INEG", "Estimate"], sum1_bi$fixed["INEG", "Estimate"])
+model1_hyp6_errors <- c(sum1_f$coefficients["INEG", "Std. Error"], sum1_bni$fixed["INEG", "Est.Error"], sum1_bi$fixed["INEG", "Est.Error"])
+model1_hyp6_p <- c(sum1_f$coefficients["INEG", 5], NA, NA)
+model1_hyp6_pp <- c(NA, hypothesis6_bni$hypothesis$Post.Prob, hypothesis6_bi$hypothesis$Post.Prob)
+
+tab <- data.frame(model = c(model1_model, model1_model),
+                  h0 = c(model1_hyp1_h0, model1_hyp6_h0),
+                  h1 = c(model1_hyp1_h1, model1_hyp6_h1),
+                  type = rep(types, 2),
+                  estimate = c(model1_hyp1_estimates, model1_hyp6_estimates),
+                  error = c(model1_hyp1_errors, model1_hyp6_errors),
+                  p = c(model1_hyp1_p, model1_hyp6_p),
+                  postprob = c(model1_hyp1_pp, model1_hyp6_pp))
+colnames(tab) <- c("Model", "H0", "H1", "Analysis type", "Estimate", "Est.Error", "p(y|H0)", "p(H1|y)")
+print(tab)
+
+```
+
+# Exploratory Analyses
+
+# Exploratory Results
